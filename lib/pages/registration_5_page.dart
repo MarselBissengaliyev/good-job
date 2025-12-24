@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'account_master_page.dart';
+
 class Registration5Page extends StatelessWidget {
   const Registration5Page({super.key});
 
@@ -44,11 +46,7 @@ class Registration5Page extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
-                      Image.asset(
-                        'assets/check.png',
-                        width: 180,
-                        height: 180,
-                      ),
+                      Image.asset('assets/check.png', width: 180, height: 180),
                     ],
                   ),
                 ),
@@ -60,8 +58,14 @@ class Registration5Page extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: переход дальше (например, в главный экран)
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AccountMasterPage(),
+                      ),
+                    );
                   },
+
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F7EDE),
                     foregroundColor: Colors.white,
