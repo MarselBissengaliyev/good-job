@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'edit_profile_info_page_master.dart';
+import 'dart:ui';
 
 class AccountMasterPage extends StatelessWidget {
   const AccountMasterPage({super.key});
@@ -65,25 +67,36 @@ class AccountMasterPage extends StatelessWidget {
                         Positioned(
                           bottom: 0,
                           right: 0,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 6,
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  // УБРАН const перед EditProfileInfoPageMaster()
+                                  builder: (context) => EditProfileInfoPageMaster(),
                                 ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Image.asset(
-                                'assets/edit.png',
-                                width: 18,
-                                height: 18,
+                              );
+                            },
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
                                 color: const Color(0xFF0F7EDE),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Image.asset(
+                                  'assets/edit.png',
+                                  width: 18,
+                                  height: 18,
+                                  color: const Color(0xFFFFFFFF),
+                                ),
                               ),
                             ),
                           ),
@@ -325,7 +338,7 @@ class AccountMasterPage extends StatelessWidget {
                                   'assets/check.png',
                                   width: 20,
                                   height: 20,
-                                       color: Colors.white,
+                                  color: Colors.white,
                                 ),
                                 const SizedBox(width: 8),
                                 const Text(
@@ -516,81 +529,78 @@ class AccountMasterPage extends StatelessWidget {
 
   // Функция для отображения модального окна подписки
  void _showSubscribeModal(BuildContext context) {
-    // Переменная состояния внутри метода
     bool isSent = false;
 
     showDialog(
       context: context,
-      barrierColor: const Color(0x1A000000),
+      barrierColor: Colors.black.withOpacity(0.2), 
       barrierDismissible: true,
       builder: (context) {
-        // StatefulBuilder позволяет обновлять экран внутри диалога
         return StatefulBuilder(
           builder: (context, setState) {
-            return Dialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Если не отправлено — показываем форму, если отправлено — успех
-                    if (!isSent) ...[
-                      const Text(
-                        'Подтвердите\nзапрос на оплату',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Dialog(
+                insetPadding: const EdgeInsets.symmetric(horizontal: 14),
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isSent) ...[
+                        const Text(
+                          'Подтвердите\nзапрос на оплату',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _buildTextField('Почта', TextInputType.emailAddress),
-                      const SizedBox(height: 16),
-                      _buildTextField('Номер', TextInputType.phone),
-                      const SizedBox(height: 32),
-                      _buildButton(
-                        text: 'Отправить',
-                        onTap: () {
-                          // Переключаем состояние вместо закрытия
-                          setState(() => isSent = true);
-                        },
-                      ),
-                    ] else ...[
-                      // КОНТЕНТ ПОСЛЕ ОТПРАВКИ
-                      const Text(
-                        'Запрос отправлен',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
+                        const SizedBox(height: 24),
+                        _buildTextField('Почта', TextInputType.emailAddress),
+                        const SizedBox(height: 16),
+                        _buildTextField('Номер', TextInputType.phone),
+                        const SizedBox(height: 32),
+                        _buildButton(
+                          text: 'Отправить',
+                          onTap: () {
+                            setState(() => isSent = true);
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      // Центрированная иконка (замените путь на ваш assets/check.png)
-                      Image.asset(
-                        'assets/check.png',
-                        width: 80,
-                        height: 80,
-                        color: const Color(0xFF1DCE6A), // Можно подкрасить, если нужно
-                      ),
-                      const SizedBox(height: 32),
-                      _buildButton(
-                        text: 'На главную',
-                        onTap: () {
-                          Navigator.pop(context); // Закрываем модалку
-                        },
-                      ),
+                      ] else ...[
+                        const Text(
+                          'Запрос отправлен',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        Image.asset(
+                          'assets/check.png',
+                          width: 80,
+                          height: 80,
+                          color: const Color(0xFF1DCE6A),
+                        ),
+                        const SizedBox(height: 32),
+                        _buildButton(
+                          text: 'На главную',
+                          onTap: () {
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             );
