@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
-
+import 'package:provider/provider.dart';
+import '../role_provider.dart';
 import 'account_master_page.dart';
+import 'account_client_page.dart';
 
 class Registration5Page extends StatelessWidget {
   const Registration5Page({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final roleProvider = Provider.of<RoleProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
@@ -58,14 +62,23 @@ class Registration5Page extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AccountMasterPage(),
-                      ),
-                    );
+                    // Навигация на разные страницы в зависимости от роли
+                    if (roleProvider.isMasterSelected) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AccountMasterPage(),
+                        ),
+                      );
+                    } else if (roleProvider.isClientSelected) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AccountClientPage(),
+                        ),
+                      );
+                    }
                   },
-
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F7EDE),
                     foregroundColor: Colors.white,

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../role_provider.dart';
 import 'registration_3_page.dart';
 
 class RegistrationPage extends StatelessWidget {
@@ -6,8 +8,10 @@ class RegistrationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final roleProvider = Provider.of<RoleProvider>(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA), // фон всего экрана
+      backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -63,44 +67,58 @@ class RegistrationPage extends StatelessWidget {
                       Row(
                         children: [
                           // Мастер
-                          // Мастер
                           Expanded(
                             child: Column(
                               children: [
                                 GestureDetector(
                                   onTap: () {
-                                    // Действие при выборе Мастер
+                                    roleProvider.selectMaster();
                                   },
                                   child: Container(
                                     height: 160,
                                     decoration: BoxDecoration(
                                       border: Border.all(
-                                        color: Colors.grey,
-                                        width: 1,
+                                        color: roleProvider.isMasterSelected
+                                            ? Colors.blue
+                                            : Colors.grey,
+                                        width: roleProvider.isMasterSelected
+                                            ? 2
+                                            : 1,
                                       ),
                                       borderRadius: BorderRadius.circular(12),
+                                      color: roleProvider.isMasterSelected
+                                          ? Colors.blue.withOpacity(0.1)
+                                          : Colors.transparent,
                                     ),
                                     padding: const EdgeInsets.only(
                                       top: 12,
                                       left: 12,
                                       right: 12,
-                                    ), // только сверху и по бокам
+                                    ),
                                     child: Align(
-                                      alignment: Alignment
-                                          .bottomCenter, // прижимаем к низу
+                                      alignment: Alignment.bottomCenter,
                                       child: Image.asset(
                                         'assets/master.png',
                                         fit: BoxFit.contain,
+                                        color: roleProvider.isMasterSelected
+                                            ? Colors.blue
+                                            : null,
                                       ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                const Text(
+                                Text(
                                   'Я - Мастер',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontFamily: 'Plus Jakarta Sans',
+                                    color: roleProvider.isMasterSelected
+                                        ? Colors.blue
+                                        : Colors.black,
+                                    fontWeight: roleProvider.isMasterSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -111,22 +129,28 @@ class RegistrationPage extends StatelessWidget {
                           const SizedBox(width: 16),
 
                           // Заказчик
-                          // Заказчик
                           Expanded(
                             child: Column(
                               children: [
                                 GestureDetector(
                                   onTap: () {
-                                    // Действие при выборе Заказчик
+                                    roleProvider.selectClient();
                                   },
                                   child: Container(
                                     height: 160,
                                     decoration: BoxDecoration(
                                       border: Border.all(
-                                        color: Colors.grey,
-                                        width: 1,
+                                        color: roleProvider.isClientSelected
+                                            ? Colors.blue
+                                            : Colors.grey,
+                                        width: roleProvider.isClientSelected
+                                            ? 2
+                                            : 1,
                                       ),
                                       borderRadius: BorderRadius.circular(12),
+                                      color: roleProvider.isClientSelected
+                                          ? Colors.blue.withOpacity(0.1)
+                                          : Colors.transparent,
                                     ),
                                     padding: const EdgeInsets.only(
                                       top: 12,
@@ -138,16 +162,25 @@ class RegistrationPage extends StatelessWidget {
                                       child: Image.asset(
                                         'assets/client.png',
                                         fit: BoxFit.contain,
+                                        color: roleProvider.isClientSelected
+                                            ? Colors.blue
+                                            : null,
                                       ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                const Text(
+                                Text(
                                   'Я - Заказчик',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontFamily: 'Plus Jakarta Sans',
+                                    color: roleProvider.isClientSelected
+                                        ? Colors.blue
+                                        : Colors.black,
+                                    fontWeight: roleProvider.isClientSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -166,17 +199,21 @@ class RegistrationPage extends StatelessWidget {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Переход на Registration3Page
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const Registration3Page(),
-                      ),
-                    );
-                  },
+                  onPressed: roleProvider.isRoleSelected
+                      ? () {
+                          // Переход на Registration3Page
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const Registration3Page(),
+                            ),
+                          );
+                        }
+                      : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: roleProvider.isRoleSelected
+                        ? Colors.blue
+                        : Colors.grey,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
