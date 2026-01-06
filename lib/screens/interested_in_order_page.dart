@@ -22,7 +22,9 @@ class InterestedInOrderPage extends StatelessWidget {
     // Парсим имя и фамилию
     final nameParts = viewerName.split(' ');
     final lastName = nameParts.isNotEmpty ? nameParts[0] : 'Константинов';
-    final fullName = nameParts.length > 1 ? nameParts[1] : 'Константин Константинович';
+    final fullName = nameParts.length > 1
+        ? nameParts[1]
+        : 'Константин Константинович';
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
@@ -83,7 +85,6 @@ class InterestedInOrderPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                     
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -260,7 +261,7 @@ class InterestedInOrderPage extends StatelessWidget {
                     radius = const BorderRadius.only(
                       topLeft: Radius.circular(r),
                     );
-                  } else if (index == 2) {
+                  } else if (index == 2) {  
                     radius = const BorderRadius.only(
                       topRight: Radius.circular(r),
                     );
@@ -274,28 +275,36 @@ class InterestedInOrderPage extends StatelessWidget {
                     );
                   }
 
-                  // последний блок "+"
-                  if (index == 8) {
+                  // Тут можно заменить на реальный список изображений
+                  final List<String?> works = [
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    'assets/work_sample.png',
+                    null, // последний блок пустой
+                  ];
+
+                  final workImage = works[index];
+
+                  if (workImage == null) {
                     return Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFFE0E0E0),
                         borderRadius: radius,
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.add,
-                          size: 26,
-                          color: Color(0xFF0F7EDE),
-                        ),
-                      ),
+                      child: const SizedBox.shrink(), // ничего не показываем
                     );
                   }
 
                   return Container(
                     decoration: BoxDecoration(
                       borderRadius: radius,
-                      image: const DecorationImage(
-                        image: AssetImage('assets/work_sample.png'),
+                      image: DecorationImage(
+                        image: AssetImage(workImage),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -305,72 +314,53 @@ class InterestedInOrderPage extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // 🔹 Информация о заказе, который просмотрел мастер
-              if (order.isNotEmpty)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Просмотрел ваш заказ:',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        order['title'] ?? 'Заказ',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF0F7EDE),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Бюджет: ${order['price'] ?? 'Не указан'}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF5F6368),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        order['description'] ?? '',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF5F6368),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(
-                height: 80,
-              ), // Отступ чтобы не заезжала под bottom nav
+              // Отступ чтобы контент не заезжал под кнопку
+              const SizedBox(height: 80),
             ],
           ),
         ),
       ),
+
+      // Кнопка фиксированная над навигацией
+      floatingActionButton: Container(
+        width: double.infinity,
+        height: 56,
+        margin: const EdgeInsets.fromLTRB(61, 0, 61, 77), // 61px от боков, 16px от навигации
+        child: ElevatedButton(
+          onPressed: () {
+            // TODO: Логика связи с мастером
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0F7EDE),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/call.png',
+                width: 22,
+                height: 22,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Связаться с мастером',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white,
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       // 🔽 Bottom Navigation Bar
       bottomNavigationBar: ClipRRect(
@@ -434,13 +424,30 @@ class InterestedInOrderPage extends StatelessWidget {
                   ),
                 ],
               ),
-             
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/account.png',
+                    width: 24,
+                    height: 24,
+                    color: Color(0xFF0F7EDE),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Аккаунт',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF0F7EDE),
+                      fontFamily: 'Plus Jakarta Sans',
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
   }
-
- 
 }
