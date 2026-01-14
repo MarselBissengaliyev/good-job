@@ -1,4 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../models/city.dart';
+import '../role_provider.dart';
+import '../services/api_service.dart';
 import 'registration_4_page.dart';
 
 class Registration3Page extends StatefulWidget {
@@ -9,35 +16,351 @@ class Registration3Page extends StatefulWidget {
 }
 
 class _Registration3PageState extends State<Registration3Page> {
-  String? selectedCity;
+  int? selectedCityId;
   TextEditingController nameController = TextEditingController();
   TextEditingController surnameController = TextEditingController();
   TextEditingController phoneController = TextEditingController();
+
+  bool _isLoading = false;
+  String? _errorMessage;
+  Map<String, dynamic>? _fieldErrors;
+
+  // Фокус ноды для управления клавиатурой
+  final FocusNode _phoneFocusNode = FocusNode();
+  bool _phoneHasError = false;
 
   bool get isFormValid {
     return nameController.text.isNotEmpty &&
         surnameController.text.isNotEmpty &&
         phoneController.text.isNotEmpty &&
-        selectedCity != null;
+        selectedCityId != null;
+  }
+
+  // Метод для извлечения сообщений об ошибках из ответа API
+  String _extractErrorMessage(dynamic error) {
+    try {
+      print('[DEBUG] Обработка ошибки: $error');
+
+      if (error is String) {
+        // Пробуем распарсить JSON ошибки
+        if (error.contains('{') && error.contains('}')) {
+          try {
+            final errorJson = json.decode(error);
+            return _parseApiError(errorJson);
+          } catch (e) {
+            print('[DEBUG] Не удалось распарсить как JSON: $e');
+            return error;
+          }
+        }
+        return error;
+      } else if (error is Map<String, dynamic>) {
+        return _parseApiError(error);
+      } else if (error is Exception) {
+        return error.toString().replaceAll('Exception: ', '');
+      }
+
+      return error.toString();
+    } catch (e) {
+      print('[ERROR] Ошибка при обработке сообщения об ошибке: $e');
+      return 'Произошла неизвестная ошибка';
+    }
+  }
+
+  String _parseApiError(Map<String, dynamic> errorJson) {
+    try {
+      print('[DEBUG] Парсинг ошибки API: $errorJson');
+
+      // Проверяем, есть ли raw_response с оригинальным ответом API
+      if (errorJson.containsKey('raw_response')) {
+        try {
+          final rawResponse = errorJson['raw_response'];
+          if (rawResponse is String && rawResponse.isNotEmpty) {
+            final parsedResponse = json.decode(rawResponse);
+            if (parsedResponse is Map<String, dynamic>) {
+              print('[DEBUG] Распарсенный raw_response: $parsedResponse');
+              // Рекурсивно обрабатываем распарсенный ответ
+              return _parseApiError(parsedResponse);
+            }
+          }
+        } catch (e) {
+          print('[DEBUG] Ошибка парсинга raw_response: $e');
+        }
+      }
+
+      // Извлекаем основное сообщение
+      String mainMessage = errorJson['message']?.toString() ?? '';
+
+      // Переводим системные сообщения на русский
+      if (mainMessage.contains('validation.phone')) {
+        mainMessage = 'Ошибка валидации номера телефона';
+      } else if (mainMessage.contains('validation.')) {
+        mainMessage = 'Ошибка валидации данных';
+      } else if (mainMessage.contains('Failed to register: 422')) {
+        mainMessage = 'Ошибка при регистрации (422)';
+      } else if (mainMessage.contains('Failed to register')) {
+        mainMessage = 'Ошибка при регистрации';
+      }
+
+      // Извлекаем ошибки полей
+      if (errorJson['errors'] != null && errorJson['errors'] is Map) {
+        final errors = errorJson['errors'] as Map<String, dynamic>;
+        _fieldErrors = {};
+
+        // Собираем ошибки для каждого поля
+        for (var entry in errors.entries) {
+          if (entry.value is List && (entry.value as List).isNotEmpty) {
+            String errorText = (entry.value as List).first.toString();
+
+            // Переводим ошибки полей на русский
+            if (errorText.contains('validation.phone')) {
+              errorText = 'Некорректный номер телефона';
+            } else if (errorText.contains('validation.required')) {
+              errorText = 'Это поле обязательно для заполнения';
+            } else if (errorText.contains('validation.')) {
+              errorText = 'Некорректное значение';
+            }
+
+            _fieldErrors![entry.key] = errorText;
+          }
+        }
+
+        // Формируем детальное сообщение
+        if (_fieldErrors != null && _fieldErrors!.isNotEmpty) {
+          final fieldMessages = _fieldErrors!.entries
+              .map((e) {
+                String fieldName;
+                String errorText = e.value;
+
+                switch (e.key) {
+                  case 'firstname':
+                    fieldName = 'Имя';
+                    break;
+                  case 'lastname':
+                    fieldName = 'Фамилия';
+                    break;
+                  case 'city_id':
+                    fieldName = 'Город';
+                    break;
+                  case 'active_mode':
+                    fieldName = 'Режим работы';
+                    break;
+                  case 'telephone':
+                    fieldName = 'Телефон';
+                    // Дополнительная информация для телефона
+                    if (errorText.contains('Некорректный номер')) {
+                      errorText += '\nПример правильного формата: +77071234567';
+                    }
+                    break;
+                  default:
+                    fieldName = e.key;
+                }
+                return '• $fieldName: $errorText';
+              })
+              .join('\n');
+
+          return '${mainMessage.isNotEmpty ? "$mainMessage\n\n" : ""}$fieldMessages';
+        }
+      }
+
+      // Если нет детальных ошибок, возвращаем основное сообщение
+      if (mainMessage.isEmpty) {
+        // Пробуем найти другие ключи с сообщениями
+        for (var key in ['error', 'Error', 'message', 'Message']) {
+          if (errorJson.containsKey(key)) {
+            mainMessage = errorJson[key].toString();
+            break;
+          }
+        }
+      }
+
+      return mainMessage.isNotEmpty ? mainMessage : 'Ошибка при регистрации';
+    } catch (e) {
+      print('[ERROR] Ошибка парсинга API ошибки: $e');
+      return 'Ошибка обработки ответа сервера';
+    }
+  }
+
+  // Получить сообщение об ошибке для конкретного поля
+  String? _getFieldError(String fieldName) {
+    if (_fieldErrors == null) return null;
+
+    // Маппинг русских названий полей на английские (как в API)
+    String apiFieldName;
+    switch (fieldName) {
+      case 'Имя':
+        apiFieldName = 'firstname';
+        break;
+      case 'Фамилия':
+        apiFieldName = 'lastname';
+        break;
+      case 'Город':
+        apiFieldName = 'city_id';
+        break;
+      case 'Телефон':
+        apiFieldName = 'telephone';
+        break;
+      default:
+        apiFieldName = fieldName.toLowerCase();
+    }
+
+    return _fieldErrors![apiFieldName];
+  }
+
+  Future<void> _registerUser(BuildContext context) async {
+    if (!isFormValid) {
+      setState(() {
+        _errorMessage = 'Заполните все обязательные поля';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _fieldErrors = null;
+      _phoneHasError = false;
+    });
+
+    try {
+      final roleProvider = Provider.of<RoleProvider>(context, listen: false);
+
+      // Форматируем номер телефона
+      String phoneNumber = phoneController.text;
+      print('[DEBUG] Исходный номер телефона: $phoneNumber');
+
+      // Регистрируем пользователя
+      print('[DEBUG] Начинаем регистрацию пользователя...');
+      print('[DEBUG] Данные для регистрации:');
+      print('[DEBUG] - Имя: ${nameController.text.trim()}');
+      print('[DEBUG] - Фамилия: ${surnameController.text.trim()}');
+      print('[DEBUG] - Телефон: $phoneNumber');
+      print('[DEBUG] - City ID: $selectedCityId');
+      print(
+        '[DEBUG] - Режим: ${roleProvider.selectedRole == 'Мастер' ? 'master' : 'client'}',
+      );
+
+      // Получаем данные формы
+      final firstname = nameController.text.trim();
+      final lastname = surnameController.text.trim();
+
+      // Проверяем, что поля не пустые
+      if (firstname.isEmpty || lastname.isEmpty || selectedCityId == null) {
+        throw Exception('Все поля обязательны для заполнения');
+      }
+
+      // 1. Регистрация пользователя
+      print('[DEBUG] Вызываем ApiService.registerUser...');
+      final registerResponse = await ApiService.registerUser(
+        firstname: firstname,
+        lastname: lastname,
+        telephone: phoneNumber,
+        cityId: selectedCityId!,
+        activeMode: roleProvider.selectedRole == 'Мастер' ? 'master' : 'client',
+      );
+
+      int ttl = 60;
+      if (registerResponse is Map<String, dynamic> &&
+          registerResponse.containsKey('codeTtl')) {
+        ttl = registerResponse['codeTtl'];
+      }
+
+      print('[DEBUG] Регистрация успешна. Ответ: $registerResponse');
+      print('[DEBUG] Пользователь успешно зарегистрирован');
+
+      print(
+        '[DEBUG] Переход на страницу подтверждения кода: Registration4Page',
+      );
+
+      // Переходим на страницу подтверждения
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Registration4Page(
+            phoneNumber: phoneNumber,
+            codeTtl: ttl, // Передаем полученное время
+          ),
+        ),
+      );
+
+      print('[DEBUG] Навигация выполнена');
+    } catch (e) {
+      print('[ERROR] Произошла ошибка при регистрации:');
+      print('[ERROR] Тип ошибки: ${e.runtimeType}');
+      print('[ERROR] Полный объект ошибки: $e');
+      print('[ERROR] Stack trace: ${StackTrace.current}');
+
+      // Обрабатываем ошибку
+      final errorMessage = _extractErrorMessage(e);
+
+      // Проверяем mounted перед setState
+      if (mounted) {
+        setState(() {
+          _errorMessage = errorMessage;
+        });
+      } else {
+        print(
+          '[WARNING] Widget не mounted, не могу обновить состояние с ошибкой',
+        );
+      }
+    } finally {
+      print('[DEBUG] Завершение процесса регистрации');
+
+      // Проверяем mounted перед setState
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      } else {
+        print(
+          '[WARNING] Widget не mounted, не могу обновить состояние загрузки',
+        );
+      }
+    }
+  }
+
+  // Виджет для отображения ошибки поля
+  Widget _buildFieldError(String fieldName) {
+    final error = _getFieldError(fieldName);
+    if (error == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0, left: 4.0),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 16),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              error,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final roleProvider = Provider.of<RoleProvider>(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
         child: Column(
           children: [
-            // Верхняя панель со стрелкой и логотипом
+            // Верхняя панель
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
+                    onPressed: _isLoading ? null : () => Navigator.pop(context),
                   ),
                   const Spacer(),
                   Image.asset('assets/logo.png', height: 28),
@@ -45,8 +368,8 @@ class _Registration3PageState extends State<Registration3Page> {
                 ],
               ),
             ),
-            
-            // Центрированная форма (заголовок + поля ввода)
+
+            // Форма регистрации
             Expanded(
               child: SingleChildScrollView(
                 child: Container(
@@ -55,7 +378,6 @@ class _Registration3PageState extends State<Registration3Page> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Заголовок H1
                       const Text(
                         'Регистрация',
                         style: TextStyle(
@@ -65,178 +387,279 @@ class _Registration3PageState extends State<Registration3Page> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 8), // Уменьшили с 12 до 8
+                      const SizedBox(height: 8),
 
-                      // Подзаголовок
-                      const Text(
-                        'Введите ваши данные',
-                        style: TextStyle(
+                      Text(
+                        roleProvider.isMasterSelected
+                            ? 'Регистрация для мастера'
+                            : 'Регистрация для клиента',
+                        style: const TextStyle(
                           fontSize: 18,
                           color: Colors.grey,
                           fontFamily: 'Plus Jakarta Sans',
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 32), // Уменьшили с 40 до 32
+                      const SizedBox(height: 32),
 
-                      // Поля ввода
-                      TextField(
-                        controller: nameController,
-                        onChanged: (_) => setState(() {}),
-                        decoration: InputDecoration(
-                          labelText: 'Имя',
-                          labelStyle: const TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            color: Colors.grey,
+                      // Поле имени
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: nameController,
+                            onChanged: (_) {
+                              setState(() {
+                                // Очищаем ошибку поля при изменении
+                                if (_fieldErrors != null) {
+                                  _fieldErrors!.remove('firstname');
+                                }
+                              });
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Имя',
+                              labelStyle: const TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: Colors.grey,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 16,
+                            ),
                           ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.blue),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12), // Уменьшили с 16 до 12
-
-                      TextField(
-                        controller: surnameController,
-                        onChanged: (_) => setState(() {}),
-                        decoration: InputDecoration(
-                          labelText: 'Фамилия',
-                          labelStyle: const TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            color: Colors.grey,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.blue),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12), // Уменьшили с 16 до 12
-
-                      // Выпадающий список города
-                      DropdownButtonFormField<String>(
-                        value: selectedCity,
-                        onChanged: (value) => setState(() {
-                          selectedCity = value;
-                        }),
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: 'Город',
-                          labelStyle: const TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            color: Colors.grey,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.blue),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 16,
-                          color: Colors.black,
-                        ),
-                        icon: const Icon(Icons.arrow_drop_down),
-                        borderRadius: BorderRadius.circular(12),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Уральск',
-                            child: Text('Уральск'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Алматы',
-                            child: Text('Алматы'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Астана',
-                            child: Text('Астана'),
-                          ),
+                          _buildFieldError('Имя'),
                         ],
                       ),
-                      const SizedBox(height: 12), // Уменьшили с 16 до 12
+                      const SizedBox(height: 12),
+
+                      // Поле фамилии
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: surnameController,
+                            onChanged: (_) {
+                              setState(() {
+                                if (_fieldErrors != null) {
+                                  _fieldErrors!.remove('lastname');
+                                }
+                              });
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Фамилия',
+                              labelStyle: const TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: Colors.grey,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 16,
+                            ),
+                          ),
+                          _buildFieldError('Фамилия'),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Выбор города
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DropdownButtonFormField<int>(
+                            value: selectedCityId,
+                            onChanged: (value) {
+                              print('[DEBUG] Выбран город с ID: $value');
+                              setState(() {
+                                selectedCityId = value;
+                                if (_fieldErrors != null) {
+                                  _fieldErrors!.remove('city_id');
+                                }
+                              });
+                            },
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Город',
+                              labelStyle: const TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: Colors.grey,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 16,
+                              color: Colors.black,
+                            ),
+                            icon: const Icon(Icons.arrow_drop_down),
+                            borderRadius: BorderRadius.circular(12),
+                            items: City.sampleCities.map((city) {
+                              return DropdownMenuItem<int>(
+                                value: city.id,
+                                child: Text(city.name),
+                              );
+                            }).toList(),
+                          ),
+                          _buildFieldError('Город'),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
 
                       // Поле телефона
-                      TextField(
-                        controller: phoneController,
-                        onChanged: (_) => setState(() {}),
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          labelText: 'Телефон',
-                          labelStyle: const TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            color: Colors.grey,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: phoneController,
+                            focusNode: _phoneFocusNode,
+                            onChanged: (_) {
+                              setState(() {
+                                _phoneHasError = false;
+                                if (_fieldErrors != null) {
+                                  _fieldErrors!.remove('telephone');
+                                }
+                              });
+                            },
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              labelText: 'Телефон',
+                              hintText: '+7 XXX XXX-XX-XX',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: _phoneHasError
+                                    ? Colors.red
+                                    : Colors.grey,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Colors.red),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                              helperText: 'Формат: +7XXXXXXXXXX',
+                              helperStyle: TextStyle(
+                                fontSize: 12,
+                                color: _phoneHasError
+                                    ? Colors.red
+                                    : Colors.grey,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 16,
+                            ),
                           ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.blue),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 16,
-                        ),
+                          const SizedBox(height: 4),
+                          _buildFieldError('Телефон'),
+                        ],
                       ),
 
-                      const SizedBox(height: 24), // Уменьшили с 32 до 24
+                      // Общая ошибка
+                      if (_errorMessage != null &&
+                          (_fieldErrors == null || _fieldErrors!.isEmpty))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFEBEE),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade300),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Ошибка',
+                                      style: TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        fontFamily: 'Plus Jakarta Sans',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 13,
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
 
-                      // Текст соглашения
+                      const SizedBox(height: 24),
+
+                      // Соглашение
                       const Text(
                         'Создавая аккаунт, вы принимаете',
                         style: TextStyle(
@@ -248,7 +671,8 @@ class _Registration3PageState extends State<Registration3Page> {
                       ),
                       GestureDetector(
                         onTap: () {
-                          // Действие при нажатии на ссылку
+                          print('[DEBUG] Открытие договора офферты');
+                          // TODO: Открыть договор
                         },
                         child: const Text(
                           'Договор публичной офферты',
@@ -267,44 +691,50 @@ class _Registration3PageState extends State<Registration3Page> {
               ),
             ),
 
-            // Кнопка "Далее" внизу
+            // Кнопки
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
                 children: [
+                  // Кнопка регистрации
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: isFormValid
-                          ? () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const Registration4Page(),
-                                ),
-                              );
-                            }
+                      onPressed: isFormValid && !_isLoading
+                          ? () => _registerUser(context)
                           : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isFormValid ? Colors.blue : Colors.grey,
-                        foregroundColor: Colors.white,
+                        backgroundColor: isFormValid && !_isLoading
+                            ? const Color(0xFF0F7EDE)
+                            : const Color(0xFFBABABA),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
-                        'Получить код подтверждения',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              'Получить код подтверждения',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
-                  const SizedBox(height: 16), // Уменьшили с 24 до 16
+                  const SizedBox(height: 16),
 
-                  // Альтернативный вариант входа
                   const Text(
                     'или',
                     style: TextStyle(
@@ -313,17 +743,21 @@ class _Registration3PageState extends State<Registration3Page> {
                       color: Colors.grey,
                     ),
                   ),
-                  const SizedBox(height: 12), // Уменьшили с 16 до 12
+                  const SizedBox(height: 12),
 
+                  // Кнопка входа
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: OutlinedButton(
-                      onPressed: () {
-                        // Действие для кнопки "Войти"
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              print('[DEBUG] Переход к экрану входа');
+                              // TODO: Переход на экран входа
+                            },
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.blue),
+                        side: const BorderSide(color: Color(0xFF0F7EDE)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -333,7 +767,7 @@ class _Registration3PageState extends State<Registration3Page> {
                         style: TextStyle(
                           fontSize: 17,
                           fontFamily: 'Plus Jakarta Sans',
-                          color: Colors.blue,
+                          color: Color(0xFF0F7EDE),
                         ),
                       ),
                     ),

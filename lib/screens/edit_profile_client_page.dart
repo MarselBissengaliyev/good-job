@@ -1,485 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
-class EditProfileClientPage extends StatefulWidget {
-  const EditProfileClientPage({super.key});
-
-  @override
-  State<EditProfileClientPage> createState() =>
-      _EditProfileClientPageState();
-}
-
-class _EditProfileClientPageState
-    extends State<EditProfileClientPage> {
-  late final TextEditingController _nameController;
-  late final TextEditingController _surnameController;
-  late final TextEditingController _patronymicController;
-  late final TextEditingController _phoneController;
-  late final TextEditingController _username1Controller;
-  late final TextEditingController _username2Controller;
-
-  // Для управления модалкой
-  final List<TextEditingController> _codeControllers =
-      List.generate(4, (index) => TextEditingController());
-  final List<FocusNode> _codeFocusNodes = List.generate(4, (index) => FocusNode());
-  bool _canResendCode = false;
-  int _resendTimer = 44;
-  Timer? _timer; // Убрал late, просто nullable
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: 'Константин');
-    _surnameController = TextEditingController(text: 'Константинов');
-    _patronymicController = TextEditingController(text: 'Константинович');
-    _phoneController = TextEditingController(text: '+7 (777) 777-77-77');
-    _username1Controller = TextEditingController(text: '@username');
-    _username2Controller = TextEditingController(text: '@username');
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _surnameController.dispose();
-    _patronymicController.dispose();
-    _phoneController.dispose();
-    _username1Controller.dispose();
-    _username2Controller.dispose();
-    
-    // Очистка контроллеров и фокусов кода
-    for (var controller in _codeControllers) {
-      controller.dispose();
-    }
-    for (var focusNode in _codeFocusNodes) {
-      focusNode.dispose();
-    }
-    
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  // Проверка, все ли поля кода заполнены
-  bool get _isCodeComplete {
-    return _codeControllers.every((controller) => controller.text.isNotEmpty);
-  }
-
-  // Функция для открытия модалки
-  void _openVerificationModal() {
-    // Очищаем предыдущие значения кода
-    for (var controller in _codeControllers) {
-      controller.clear();
-    }
-    
-    // Сбрасываем таймер
-    _resetTimer();
-    
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (BuildContext context) {
-        return VerificationModal(
-          phoneNumber: _phoneController.text,
-          codeControllers: _codeControllers,
-          codeFocusNodes: _codeFocusNodes,
-          isCodeComplete: _isCodeComplete,
-          resendTimer: _resendTimer,
-          canResendCode: _canResendCode,
-          onResendCode: _requestNewCode,
-          onConfirm: () {
-            // Закрыть модалку
-            Navigator.pop(context);
-            // TODO: Добавить логику сохранения данных
-            print('Код подтвержден, сохраняем изменения...');
-          },
-        );
-      },
-    );
-  }
-
-  // Сброс таймера
-  void _resetTimer() {
-    _timer?.cancel();
-    _canResendCode = false;
-    _resendTimer = 44;
-    
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_resendTimer > 0) {
-        setState(() {
-          _resendTimer--;
-        });
-      } else {
-        setState(() {
-          _canResendCode = true;
-        });
-        timer.cancel();
-      }
-    });
-  }
-
-  // Функция для запроса нового кода
-  void _requestNewCode() {
-    if (_canResendCode) {
-      _resetTimer();
-      // TODO: Отправить запрос на новый код
-      print('Запрос нового кода...');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Color(0xFF41454A),
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Редактировать профиль',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: Image.asset('assets/logout.png', width: 22, height: 22),
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF96C5EB),
-                        border: Border.all(
-                          color: const Color(0xFF0F7EDE),
-                          width: 3,
-                        ),
-                        image: const DecorationImage(
-                          image: AssetImage('assets/avatar.png'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F7EDE),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 6,
-                            ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Два блока под аватаркой
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Блок "Мастер" с синим фоном
-                  Expanded(
-                    child: Container(
-                        height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE0E0E0)),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Мастер',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF5F6368),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                 
-
-                  const SizedBox(width: 10),
-
-                  // Блок "Заказчик" с белым фоном
-                  Expanded(
-                    child: Container(
-                     height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F7EDE),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Заказчик',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-
-              // Секция "Основная информация"
-              _buildSectionHeader('Основная информация'),
-              const SizedBox(height: 16),
-              _buildTextFieldWithClear('Имя', _nameController),
-              const SizedBox(height: 8),
-              _buildTextFieldWithClear('Фамилия', _surnameController),
-              const SizedBox(height: 8),
-              _buildTextFieldWithClear('Отчество', _patronymicController),
-              const SizedBox(height: 32),
-
-              // Секция "Контактная информация"
-              _buildSectionHeader('Контактная информация'),
-              const SizedBox(height: 16),
-              _buildTextFieldWithClear('Телефон', _phoneController),
-              const SizedBox(height: 32),
-
-              // КНОПКА "СОХРАНИТЬ"
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _openVerificationModal,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F7EDE),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Сохранить',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ),
-              ),
-              
-              // КНОПКА "МОИ РАБОТЫ" - добавлена
-            
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-      // Bottom Navigation Bar
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(54),
-          topRight: Radius.circular(54),
-        ),
-        child: Container(
-          height: 70,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Работа
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/work.png',
-                    width: 24,
-                    height: 24,
-                    color: const Color(0xFF5F6368),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Работа',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF5F6368),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
-              // Прайс
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/price.png',
-                    width: 24,
-                    height: 24,
-                    color: const Color(0xFF5F6368),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Прайс',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF5F6368),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
-              // Аккаунт (активная)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/account.png',
-                    width: 24,
-                    height: 24,
-                    color: const Color(0xFF0F7EDE),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Аккаунт',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF0F7EDE),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF41454A),
-          fontFamily: 'Plus Jakarta Sans',
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextFieldWithClear(
-      String hint, TextEditingController controller) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF41454A),
-                  fontFamily: 'Plus Jakarta Sans',
-                ),
-                decoration: InputDecoration(
-                  hintText: hint,
-                  border: InputBorder.none,
-                  hintStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                    color: Color(0xFF9AA0A6),
-                    fontFamily: 'Plus Jakarta Sans',
-                  ),
-                ),
-              ),
-            ),
-            if (controller.text.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: GestureDetector(
-                  onTap: () => controller.clear(),
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE0E0E0)),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.close,
-                        color: Color(0xFF9AA0A6),
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Упрощенный виджет модального окна
 class VerificationModal extends StatefulWidget {
   final String phoneNumber;
   final List<TextEditingController> codeControllers;
@@ -491,7 +13,6 @@ class VerificationModal extends StatefulWidget {
   final VoidCallback onConfirm;
 
   const VerificationModal({
-    super.key,
     required this.phoneNumber,
     required this.codeControllers,
     required this.codeFocusNodes,
@@ -507,198 +28,365 @@ class VerificationModal extends StatefulWidget {
 }
 
 class _VerificationModalState extends State<VerificationModal> {
-  late int _modalResendTimer;
-  late bool _modalCanResendCode;
-  Timer? _modalTimer;
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Подтверждение номера'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Введите код отправленный на ${widget.phoneNumber}'),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(4, (index) {
+              return SizedBox(
+                width: 50,
+                child: TextField(
+                  controller: widget.codeControllers[index],
+                  focusNode: widget.codeFocusNodes[index],
+                  textAlign: TextAlign.center,
+                  maxLength: 1,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    counterText: '',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onChanged: (value) {
+                    if (value.isNotEmpty && index < 3) {
+                      widget.codeFocusNodes[index + 1].requestFocus();
+                    }
+                    setState(() {});
+                  },
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 20),
+          if (widget.canResendCode)
+            GestureDetector(
+              onTap: widget.onResendCode,
+              child: const Text('Отправить код снова', style: TextStyle(color: Color(0xFF0F7EDE))),
+            )
+          else
+            Text('Отправить код снова через ${widget.resendTimer}с'),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        ElevatedButton(
+          onPressed: widget.isCodeComplete ? widget.onConfirm : null,
+          child: const Text('Подтвердить'),
+        ),
+      ],
+    );
+  }
+}
+
+class EditProfileClientPage extends StatefulWidget {
+  const EditProfileClientPage({super.key});
+
+  @override
+  State<EditProfileClientPage> createState() => _EditProfileClientPageState();
+}
+
+class _EditProfileClientPageState extends State<EditProfileClientPage> {
+  // Контроллеры полей
+  late final TextEditingController _nameController;
+  late final TextEditingController _surnameController;
+  late final TextEditingController _patronymicController;
+  late final TextEditingController _phoneController;
+
+  // Состояние данных
+  bool _isLoading = true;
+  String _activeMode = 'client';
+  int? _selectedCityId;
+  List<dynamic> _cities = [];
+
+  // Управление модалкой
+  final List<TextEditingController> _codeControllers =
+      List.generate(4, (index) => TextEditingController());
+  final List<FocusNode> _codeFocusNodes = List.generate(4, (index) => FocusNode());
+  bool _canResendCode = false;
+  int _resendTimer = 44;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _modalResendTimer = widget.resendTimer;
-    _modalCanResendCode = widget.canResendCode;
-    
-    // Запускаем таймер, если еще не истек
-    if (_modalResendTimer > 0 && !_modalCanResendCode) {
-      _startModalTimer();
-    }
+    _nameController = TextEditingController();
+    _surnameController = TextEditingController();
+    _patronymicController = TextEditingController();
+    _phoneController = TextEditingController();
+    _loadInitialData();
   }
 
-  void _startModalTimer() {
-    _modalTimer?.cancel();
-    _modalTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_modalResendTimer > 0) {
-        setState(() {
-          _modalResendTimer--;
-        });
-      } else {
-        setState(() {
-          _modalCanResendCode = true;
-        });
-        timer.cancel();
-      }
-    });
-  }
+  // Загрузка городов и данных профиля
+  Future<void> _loadInitialData() async {
+    try {
+      final citiesData = await ApiService.getCities();
+      final profileData = await ApiService.getProfile();
+      final user = profileData['data'];
 
-  void _handleResendCode() {
-    if (_modalCanResendCode) {
       setState(() {
-        _modalResendTimer = 44;
-        _modalCanResendCode = false;
+        _cities = citiesData;
+        _nameController.text = user['firstname'] ?? '';
+        _surnameController.text = user['lastname'] ?? '';
+        _patronymicController.text = user['patronymic'] ?? '';
+        _phoneController.text = user['telephone'] ?? '';
+        _activeMode = user['active_mode'] ?? 'client';
+        _selectedCityId = user['city']['id'];
+        _isLoading = false;
       });
-      
-      // Запускаем таймер заново
-      _startModalTimer();
-      
-      // Вызываем callback из основного виджета
-      widget.onResendCode();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка загрузки данных: $e')),
+      );
     }
   }
 
   @override
   void dispose() {
-    _modalTimer?.cancel();
+    _nameController.dispose();
+    _surnameController.dispose();
+    _patronymicController.dispose();
+    _phoneController.dispose();
+    for (var c in _codeControllers) c.dispose();
+    for (var f in _codeFocusNodes) f.dispose();
+    _timer?.cancel();
     super.dispose();
+  }
+
+  bool get _isCodeComplete =>
+      _codeControllers.every((c) => c.text.isNotEmpty);
+
+  // Сохранение профиля через API
+  Future<void> _updateProfile() async {
+    try {
+      await ApiService.updateProfile(
+        firstname: _nameController.text,
+        lastname: _surnameController.text,
+        patronymic: _patronymicController.text,
+        cityId: _selectedCityId ?? 0,
+        activeMode: _activeMode,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Профиль успешно обновлен')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка обновления: $e')),
+      );
+    }
+  }
+
+  void _openVerificationModal() {
+    for (var c in _codeControllers) c.clear();
+    _resetTimer();
+
+    showDialog(
+      context: context,
+      builder: (context) => VerificationModal(
+        phoneNumber: _phoneController.text,
+        codeControllers: _codeControllers,
+        codeFocusNodes: _codeFocusNodes,
+        isCodeComplete: _isCodeComplete,
+        resendTimer: _resendTimer,
+        canResendCode: _canResendCode,
+        onResendCode: _requestNewCode,
+        onConfirm: () async {
+          Navigator.pop(context); // Закрываем модалку
+          await _updateProfile(); // Вызываем PUT запрос
+        },
+      ),
+    );
+  }
+
+  void _resetTimer() {
+    _timer?.cancel();
+    _canResendCode = false;
+    _resendTimer = 44;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendTimer > 0) {
+        if (mounted) setState(() => _resendTimer--);
+      } else {
+        if (mounted) setState(() => _canResendCode = true);
+        timer.cancel();
+      }
+    });
+  }
+
+  void _requestNewCode() {
+    if (_canResendCode) {
+      _resetTimer();
+      ApiService.sendVerificationCode(telephone: _phoneController.text);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFAFAFA),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF41454A), size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: const Text('Редактировать профиль', 
+          style: TextStyle(fontSize: 20, color: Color(0xFF41454A), fontWeight: FontWeight.w500)),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Для подтверждения смены номера',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF41454A),
-                fontFamily: 'Plus Jakarta Sans',
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Код отправлен на номер ${widget.phoneNumber}',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-                color: Color(0xFF5F6368),
-                fontFamily: 'Plus Jakarta Sans',
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Поля ввода кода
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(4, (index) {
-                return SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: TextField(
-                    controller: widget.codeControllers[index],
-                    focusNode: widget.codeFocusNodes[index],
-                    textAlign: TextAlign.center,
-                    maxLength: 1,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF41454A),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                    decoration: InputDecoration(
-                      counterText: '',
-                      contentPadding: EdgeInsets.zero,
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: widget.codeFocusNodes[index].hasFocus
-                              ? const Color(0xFF0F7EDE)
-                              : const Color(0xFFE0E0E0),
-                          width: 2,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF0F7EDE),
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    onChanged: (value) {
-                      if (value.isNotEmpty && index < 3) {
-                        FocusScope.of(context).requestFocus(widget.codeFocusNodes[index + 1]);
-                      }
-                      if (value.isEmpty && index > 0) {
-                        FocusScope.of(context).requestFocus(widget.codeFocusNodes[index - 1]);
-                      }
-                    },
-                  ),
-                );
-              }),
-            ),
+            _buildAvatarSection(),
+            const SizedBox(height: 20),
+            _buildModeSwitcher(),
+            const SizedBox(height: 32),
+            _buildSectionHeader('Основная информация'),
             const SizedBox(height: 16),
-            
-            // Таймер / Повторная отправка
-            Center(
-              child: GestureDetector(
-                onTap: _modalCanResendCode ? _handleResendCode : null,
-                child: Text(
-                  _modalCanResendCode
-                      ? 'Запросить новый код'
-                      : 'Запросить новый код через 00:${_modalResendTimer.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: _modalCanResendCode
-                        ? const Color(0xFF0F7EDE)
-                        : const Color(0xFF9AA0A6),
-                    fontFamily: 'Plus Jakarta Sans',
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Кнопка подтверждения
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: widget.isCodeComplete ? widget.onConfirm : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.isCodeComplete
-                      ? const Color(0xFF0F7EDE)
-                      : const Color(0xFFE0E0E0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Подтвердить',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: widget.isCodeComplete
-                        ? Colors.white
-                        : const Color(0xFF9AA0A6),
-                    fontFamily: 'Plus Jakarta Sans',
-                  ),
-                ),
-              ),
-            ),
+            _buildTextFieldWithClear('Имя', _nameController),
+            const SizedBox(height: 8),
+            _buildTextFieldWithClear('Фамилия', _surnameController),
+            const SizedBox(height: 8),
+            _buildTextFieldWithClear('Отчество', _patronymicController),
+            const SizedBox(height: 16),
+            _buildCityDropdown(),
+            const SizedBox(height: 32),
+            _buildSectionHeader('Контактная информация'),
+            const SizedBox(height: 16),
+            _buildTextFieldWithClear('Телефон', _phoneController),
+            const SizedBox(height: 32),
+            _buildSaveButton(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarSection() {
+    return Center(
+      child: Stack(
+        children: [
+          Container(
+            width: 120, height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF96C5EB),
+              border: Border.all(color: const Color(0xFF0F7EDE), width: 3),
+              image: const DecorationImage(image: AssetImage('assets/avatar.png'), fit: BoxFit.cover),
+            ),
+          ),
+          Positioned(
+            top: 0, right: 0,
+            child: Container(
+              width: 32, height: 32,
+              decoration: const BoxDecoration(color: Color(0xFF0F7EDE), shape: BoxShape.circle),
+              child: const Icon(Icons.close, color: Colors.white, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeSwitcher() {
+    return Row(
+      children: [
+        _modeButton('Мастер', 'master'),
+        const SizedBox(width: 10),
+        _modeButton('Заказчик', 'client'),
+      ],
+    );
+  }
+
+  Widget _modeButton(String label, String mode) {
+    bool isActive = _activeMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _activeMode = mode),
+        child: Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFF0F7EDE) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: isActive ? Colors.transparent : const Color(0xFFE0E0E0)),
+          ),
+          child: Center(
+            child: Text(label, style: TextStyle(
+              color: isActive ? Colors.white : const Color(0xFF5F6368),
+              fontWeight: FontWeight.w500
+            )),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCityDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: _selectedCityId,
+          isExpanded: true,
+          hint: const Text("Выберите город"),
+          items: _cities.map((city) {
+            return DropdownMenuItem<int>(
+              value: city['id'],
+              child: Text(city['name']),
+            );
+          }).toList(),
+          onChanged: (val) => setState(() => _selectedCityId = val),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity, height: 56,
+      child: ElevatedButton(
+        onPressed: _openVerificationModal,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF0F7EDE),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Align(alignment: Alignment.centerLeft, child: Text(title, 
+      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF41454A))));
+  }
+
+  Widget _buildTextFieldWithClear(String hint, TextEditingController controller) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E0E0))),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(child: TextField(controller: controller, decoration: InputDecoration(hintText: hint, border: InputBorder.none))),
+          if (controller.text.isNotEmpty)
+            IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => controller.clear())),
+        ],
       ),
     );
   }
