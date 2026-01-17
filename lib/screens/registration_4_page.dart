@@ -249,8 +249,40 @@ class _Registration4PageState extends State<Registration4Page> {
     return TextButton(
       onPressed: _isLoading
           ? null
-          : () {
-              /* Логика переотправки */
+          : () async {
+              setState(() {
+                _isLoading = true;
+              });
+
+              try {
+                // Повторная отправка кода
+                await ApiService.login(telephone: widget.phoneNumber);
+                setState(() {
+                  _remainingSeconds = widget.codeTtl;
+                });
+                _startTimer();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Код отправлен повторно на ${widget.phoneNumber}',
+                    ),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Ошибка: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } finally {
+                if (mounted) {
+                  setState(() {
+                    _isLoading = false;
+                  });
+                }
+              }
             },
       child: const Text(
         'Запросить новый код',

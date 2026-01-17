@@ -1,27 +1,45 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/home_page.dart';
-import 'package:flutter_application_1/screens/account_master_page.dart';
 import 'package:flutter_application_1/screens/account_client_page.dart';
+import 'package:flutter_application_1/screens/account_master_page.dart';
+import 'package:flutter_application_1/screens/home_page.dart';
 import 'package:provider/provider.dart';
+
 import 'role_provider.dart';
-import 'services/auth_service.dart';
 import 'services/api_service.dart';
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  runApp(const MyApp());
+
+  // Проверяем, авторизован ли пользователь
+  final isLoggedIn = await AuthService.isLoggedIn();
+  final userRole = await AuthService.getUserRole();
+
+  runApp(MyApp(initialRoute: _getInitialRoute(isLoggedIn, userRole)));
+}
+
+String _getInitialRoute(bool isLoggedIn, String? userRole) {
+  if (!isLoggedIn) {
+    return '/';
+  }
+
+  // Определяем куда перенаправить в зависимости от роли
+  if (userRole == 'master') {
+    return '/account-master';
+  } else {
+    return '/account-client';
+  }
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+
+  const MyApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => RoleProvider()),
-      ],
+      providers: [ChangeNotifierProvider(create: (_) => RoleProvider())],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Flutter Demo',
@@ -35,7 +53,7 @@ class MyApp extends StatelessWidget {
             iconTheme: IconThemeData(color: Colors.black),
           ),
         ),
-        initialRoute: '/',
+        initialRoute: initialRoute,
         routes: {
           '/': (context) => const AuthChecker(),
           '/registration': (context) => const MyHomePage(),
@@ -55,8 +73,6 @@ class AuthChecker extends StatefulWidget {
 }
 
 class _AuthCheckerState extends State<AuthChecker> {
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -64,50 +80,33 @@ class _AuthCheckerState extends State<AuthChecker> {
   }
 
   Future<void> _checkAuth() async {
-    final isLoggedIn = await AuthService.isLoggedIn();
-    
-    if (mounted) {
-      if (isLoggedIn) {
-        // Если авторизован, получаем роль и переходим на соответствующую страницу
-        try {
-          final role = await _getUserRole();
-          
-          if (role == 'master') {
-            Navigator.pushReplacementNamed(context, '/account-master');
-          } else {
-            Navigator.pushReplacementNamed(context, '/account-client');
-          }
-        } catch (e) {
-          // Если ошибка при получении роли, показываем экран регистрации
-          print('Ошибка получения роли: $e');
-          Navigator.pushReplacementNamed(context, '/registration');
+    try {
+      final role = await _getUserRole();
+
+      if (mounted) {
+        if (role == 'master') {
+          Navigator.pushReplacementNamed(context, '/account-master');
+        } else {
+          Navigator.pushReplacementNamed(context, '/account-client');
         }
-      } else {
-        // Если не авторизован, идем на регистрацию
+      }
+    } catch (e) {
+      print('Авторизация не пройдена: $e');
+      if (mounted) {
         Navigator.pushReplacementNamed(context, '/registration');
       }
     }
   }
 
   Future<String> _getUserRole() async {
-    // 1. Сначала пытаемся получить роль из SharedPreferences
-    final savedRole = await AuthService.getUserRole();
-    if (savedRole != null && savedRole.isNotEmpty) {
-      return savedRole;
-    }
-
-    // 2. Если нет сохраненной роли, запрашиваем профиль с API
     try {
       final profileResponse = await ApiService.getProfile();
       final activeMode = profileResponse['data']['active_mode'] as String;
-      
-      // Сохраняем роль для будущего использования
       await AuthService.saveUserRole(activeMode);
-      
+
       return activeMode;
     } catch (e) {
-      print('Ошибка при получении профиля: $e');
-      throw Exception('Не удалось определить роль пользователя');
+      rethrow;
     }
   }
 

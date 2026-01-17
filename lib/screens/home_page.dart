@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'registration_page.dart';
+import 'login_page.dart'; // Добавьте этот импорт
 
 class MyHomePage extends StatelessWidget {
   const MyHomePage({super.key});
@@ -7,7 +8,7 @@ class MyHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: const Color(0xFFFAFAFA), // фон всего экрана
+      backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -30,7 +31,14 @@ class MyHomePage extends StatelessWidget {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginPage(),
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         shape: RoundedRectangleBorder(

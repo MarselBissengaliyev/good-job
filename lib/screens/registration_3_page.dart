@@ -22,10 +22,13 @@ class _Registration3PageState extends State<Registration3Page> {
   TextEditingController phoneController = TextEditingController();
 
   bool _isLoading = false;
+  bool _loadingCities = false;
   String? _errorMessage;
   Map<String, dynamic>? _fieldErrors;
 
-  // Фокус ноды для управления клавиатурой
+  // Список городов из API
+  List<City> _cities = [];
+
   final FocusNode _phoneFocusNode = FocusNode();
   bool _phoneHasError = false;
 
@@ -34,6 +37,50 @@ class _Registration3PageState extends State<Registration3Page> {
         surnameController.text.isNotEmpty &&
         phoneController.text.isNotEmpty &&
         selectedCityId != null;
+  }
+
+  void initState() {
+    super.initState();
+    // Загружаем города при инициализации
+    _loadCities();
+  }
+
+  Future<void> _loadCities() async {
+    if (_loadingCities) return;
+
+    setState(() {
+      _loadingCities = true;
+    });
+
+    try {
+      print('[DEBUG] Загрузка списка городов из API...');
+      final citiesData = await ApiService.getCities();
+
+      // Преобразуем данные в список City
+      final List<City> cities = citiesData
+          .map<City>((cityJson) => City.fromJson(cityJson))
+          .toList();
+
+      print('[DEBUG] Загружено ${cities.length} городов');
+
+      if (mounted) {
+        setState(() {
+          _cities = cities;
+          _loadingCities = false;
+        });
+      }
+    } catch (e) {
+      print('[ERROR] Ошибка при загрузке городов: $e');
+
+      if (mounted) {
+        setState(() {
+          _loadingCities = false;
+          _errorMessage =
+              'Не удалось загрузить список городов. Проверьте подключение к интернету.';
+          _cities = []; // Очищаем список в случае ошибки
+        });
+      }
+    }
   }
 
   // Метод для извлечения сообщений об ошибках из ответа API
@@ -494,57 +541,165 @@ class _Registration3PageState extends State<Registration3Page> {
                       const SizedBox(height: 12),
 
                       // Выбор города
+                      // В методе build, в секции "Выбор города":
+                      // Выбор города
+                      // Выбор города
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          DropdownButtonFormField<int>(
-                            value: selectedCityId,
-                            onChanged: (value) {
-                              print('[DEBUG] Выбран город с ID: $value');
-                              setState(() {
-                                selectedCityId = value;
-                                if (_fieldErrors != null) {
-                                  _fieldErrors!.remove('city_id');
-                                }
-                              });
-                            },
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: 'Город',
-                              labelStyle: const TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
-                                color: Colors.grey,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
+                          if (_loadingCities)
+                            // Показать индикатор загрузки
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
-                                vertical: 16,
+                                vertical: 20,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: 8),
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  const Text(
+                                    'Загрузка городов...',
+                                    style: TextStyle(
+                                      fontFamily: 'Plus Jakarta Sans',
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (_cities.isEmpty)
+                            // Показать сообщение об ошибке
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 20,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Не удалось загрузить города',
+                                    style: TextStyle(
+                                      fontFamily: 'Plus Jakarta Sans',
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: _loadCities,
+                                    child: const Text(
+                                      'Попробовать снова',
+                                      style: TextStyle(
+                                        fontFamily: 'Plus Jakarta Sans',
+                                        color: Colors.blue,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            // Показать нормальный выпадающий список
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: _getFieldError('Город') != null
+                                      ? Colors.red
+                                      : Colors.grey.shade400,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButtonFormField<int>(
+                                  value: selectedCityId,
+                                  onChanged: (value) {
+                                    print('[DEBUG] Выбран город с ID: $value');
+                                    setState(() {
+                                      selectedCityId = value;
+                                      if (_fieldErrors != null) {
+                                        _fieldErrors!.remove('city_id');
+                                      }
+                                    });
+                                  },
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Город',
+                                    labelStyle: TextStyle(
+                                      fontFamily: 'Plus Jakarta Sans',
+                                      color: _getFieldError('Город') != null
+                                          ? Colors.red
+                                          : Colors.grey,
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                    suffixIcon: const Icon(
+                                      Icons.arrow_drop_down,
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                  icon: const SizedBox.shrink(),
+                                  borderRadius: BorderRadius.circular(12),
+                                  // Добавляем placeholder текст
+                                  hint: selectedCityId == null
+                                      ? const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8.0,
+                                          ),
+                                          child: Text(
+                                            'Выберите город',
+                                            style: TextStyle(
+                                              fontFamily: 'Plus Jakarta Sans',
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                  items: _cities.map((city) {
+                                    return DropdownMenuItem<int>(
+                                      value: city.id,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8.0,
+                                        ),
+                                        child: Text(
+                                          city.name,
+                                          style: const TextStyle(
+                                            fontFamily: 'Plus Jakarta Sans',
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
-                            style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 16,
-                              color: Colors.black,
-                            ),
-                            icon: const Icon(Icons.arrow_drop_down),
-                            borderRadius: BorderRadius.circular(12),
-                            items: City.sampleCities.map((city) {
-                              return DropdownMenuItem<int>(
-                                value: city.id,
-                                child: Text(city.name),
-                              );
-                            }).toList(),
-                          ),
                           _buildFieldError('Город'),
                         ],
                       ),
@@ -568,7 +723,6 @@ class _Registration3PageState extends State<Registration3Page> {
                             keyboardType: TextInputType.phone,
                             decoration: InputDecoration(
                               labelText: 'Телефон',
-                              hintText: '+7 XXX XXX-XX-XX',
                               labelStyle: TextStyle(
                                 fontFamily: 'Plus Jakarta Sans',
                                 color: _phoneHasError
@@ -590,7 +744,6 @@ class _Registration3PageState extends State<Registration3Page> {
                                 horizontal: 16,
                                 vertical: 16,
                               ),
-                              helperText: 'Формат: +7XXXXXXXXXX',
                               helperStyle: TextStyle(
                                 fontSize: 12,
                                 color: _phoneHasError

@@ -5,12 +5,18 @@ class City {
   City({required this.id, required this.name});
 
   factory City.fromJson(Map<String, dynamic> json) {
-    return City(id: json['id'], name: json['name']);
+    return City(
+      id: json['id'] as int,
+      name: json['name'] as String,
+    );
   }
 
-  static List<City> get sampleCities => [
-    City(id: 1, name: 'Уральск'),
-    City(id: 2, name: 'Алматы'),
-    City(id: 3, name: 'Астана'),
-  ];
+  static List<City> fromJsonList(List<dynamic> jsonList) {
+    return jsonList
+        .map((cityJson) => City.fromJson(cityJson))
+        .toList();
+  }
+
+  // Удаляем статический список sampleCities
+  // static List<City> get sampleCities => [...]
 }

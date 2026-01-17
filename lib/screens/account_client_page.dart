@@ -69,7 +69,7 @@ class _AccountClientPageState extends State<AccountClientPage> {
               await AuthService.clearAuthData();
               if (mounted) Navigator.pushReplacementNamed(context, '/registration');
             },
-            icon: Image.asset('assets/logout.png', width: 22, height: 22),
+            icon: Image.asset('assets/logout.png', width: 22, height: 22),  
           ),
         ],
       ),

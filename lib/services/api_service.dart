@@ -7,6 +7,8 @@ import 'auth_service.dart';
 class ApiService {
   static const String baseUrl = 'http://gj-back.checkedout.kz/api';
 
+  
+
   // Регистрация нового пользователя
   static Future<Map<String, dynamic>> registerUser({
     required String firstname,
@@ -106,49 +108,8 @@ class ApiService {
       return null;
     }
   }
+ 
 
-  // Отправка кода подтверждения
-  static Future<Map<String, dynamic>> sendVerificationCode({
-    required String telephone,
-  }) async {
-    final url = Uri.parse('$baseUrl/auth/login');
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'telephone': telephone}),
-    );
-
-    print('[API DEBUG] Статус код отправки кода: ${response.statusCode}');
-    print('[API DEBUG] Тело ответа отправки кода: ${response.body}');
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      try {
-        final errorBody = jsonDecode(response.body);
-        print('[API DEBUG] Ошибка отправки кода: $errorBody');
-
-        if (errorBody is Map<String, dynamic>) {
-          throw errorBody;
-        } else {
-          throw {
-            'message': 'Failed to send code: ${response.statusCode}',
-            'raw_error': errorBody.toString(),
-          };
-        }
-      } catch (e) {
-        print('[API DEBUG] Ошибка парсинга ответа отправки кода: $e');
-        throw {
-          'message': 'Failed to send code: ${response.statusCode}',
-          'raw_response': response.body,
-        };
-      }
-    }
-  }
 
   // Подтверждение телефона
   static Future<Map<String, dynamic>> confirmPhone({
@@ -226,13 +187,47 @@ class ApiService {
     };
   }
 
+   static Future<dynamic> login({
+    required String telephone,
+  }) async {
+    try {
+      print('[DEBUG] Отправка запроса на вход...');
+      print('[DEBUG] Телефон: $telephone');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/login'),
+        headers: await _getHeaders(),
+        body: json.encode({
+          'telephone': telephone,
+        }),
+      );
+
+      print('[DEBUG] Статус ответа: ${response.statusCode}');
+      print('[DEBUG] Тело ответа: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        print('[DEBUG] Успешный вход, код отправлен');
+        return responseData;
+      } else if (response.statusCode == 422) {
+        final errorData = json.decode(response.body);
+        print('[DEBUG] Ошибка валидации: $errorData');
+        throw errorData;
+      } else {
+        final errorData = json.decode(response.body);
+        print('[DEBUG] Ошибка сервера: $errorData');
+        throw errorData ?? 'Ошибка сервера ${response.statusCode}';
+      }
+    } catch (e) {
+      print('[ERROR] Исключение в методе login: $e');
+      rethrow;
+    }
+  }
+
   // Пример обновления метода getProfile
   static Future<Map<String, dynamic>> getProfile() async {
     final url = Uri.parse('$baseUrl/me');
-    final response = await http.get(
-      url,
-      headers: await _getHeaders(), // Используем общий метод
-    );
+    final response = await http.get(url, headers: await _getHeaders());
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -276,19 +271,63 @@ class ApiService {
       body: jsonEncode({
         'firstname': firstname,
         'lastname': lastname,
-        'patronymic': patronymic,
+        'patronymic': patronymic ?? '', // или null, если API позволяет
         'city_id': cityId,
         'active_mode': activeMode,
       }),
     );
 
-    print('[API DEBUG] Update Profile Status: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final errorBody = jsonDecode(response.body);
+      throw Exception(errorBody['message'] ?? 'Failed to update profile');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateTelephone({
+    required String telephone,
+  }) async {
+    final url = Uri.parse('$baseUrl/me/tel');
+    final headers = await _getHeaders();
+
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode({'telephone': telephone}),
+    );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
       final errorBody = jsonDecode(response.body);
-      throw errorBody;
+      throw Exception(errorBody['message'] ?? 'Failed to update telephone');
+    }
+  }
+
+  static Future<Map<String, dynamic>> confirmNewTelephone({
+    required String telephone,
+    required String code,
+  }) async {
+    final url = Uri.parse('$baseUrl/me/tel/confirm');
+    final headers = await _getHeaders();
+
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode({'telephone': telephone, 'code': code}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      // Сохраняем новый токен
+      if (data['access_token'] != null) {
+        await AuthService.saveToken(data['access_token']);
+      }
+      return data;
+    } else {
+      final errorBody = jsonDecode(response.body);
+      throw Exception(errorBody['message'] ?? 'Failed to confirm telephone');
     }
   }
 }
