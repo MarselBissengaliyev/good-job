@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/account_client_page.dart';
-import 'package:flutter_application_1/screens/account_master_page.dart';
+import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/screens/home_page.dart';
 import 'package:provider/provider.dart';
 
@@ -57,8 +56,10 @@ class MyApp extends StatelessWidget {
         routes: {
           '/': (context) => const AuthChecker(),
           '/registration': (context) => const MyHomePage(),
-          '/account-master': (context) => const AccountMasterPage(),
-          '/account-client': (context) => const AccountClientPage(),
+          '/account-master': (context) =>
+              const AccountPage(accountType: AccountType.master),
+          '/account-client': (context) =>
+              const AccountPage(accountType: AccountType.client),
         },
       ),
     );

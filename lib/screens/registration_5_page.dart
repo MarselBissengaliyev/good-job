@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:provider/provider.dart';
 import '../role_provider.dart';
-import 'account_master_page.dart';
-import 'account_client_page.dart';
 
 class Registration5Page extends StatelessWidget {
   const Registration5Page({super.key});
@@ -67,14 +66,14 @@ class Registration5Page extends StatelessWidget {
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const AccountMasterPage(),
+                          builder: (context) => const AccountPage(accountType: AccountType.master),
                         ),
                       );
                     } else if (roleProvider.isClientSelected) {
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const AccountClientPage(),
+                          builder: (context) => const AccountPage(accountType: AccountType.client),
                         ),
                       );
                     }

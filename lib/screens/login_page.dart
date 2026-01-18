@@ -263,7 +263,6 @@ class _LoginPageState extends State<LoginPage> {
                                 horizontal: 16,
                                 vertical: 16,
                               ),
-                              helperText: 'Пример: +77071234567',
                               helperStyle: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,
