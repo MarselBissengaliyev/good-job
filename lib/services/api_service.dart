@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
+import 'package:flutter_application_1/models/work-photo.dart';
 import 'package:http/http.dart' as http;
-
+import 'package:path/path.dart' as path;
 import 'auth_service.dart';
+import 'package:async/async.dart';
 
 void logApi(String message, {bool isError = false}) {
   final timestamp = DateTime.now().toIso8601String();
@@ -14,7 +18,7 @@ void logApi(String message, {bool isError = false}) {
 class ApiService {
   static const String baseUrl = 'http://gj-back.checkedout.kz/api';
 
- static Future<List<dynamic>> getCategories() async {
+  static Future<List<dynamic>> getCategories() async {
     final url = Uri.parse('$baseUrl/categories');
 
     logApi('Getting categories:');
@@ -62,15 +66,239 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> uploadWorkPhoto(File imageFile) async {
+    final url = Uri.parse('$baseUrl/me/master/work-photos');
+
+    print('=== ЗАГРУЗКА ИЗОБРАЖЕНИЯ НА СЕРВЕР ===');
+    print('  URL: $url');
+    print('  File path: ${imageFile.path}');
+    print('  File size: ${imageFile.lengthSync()} bytes');
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        print('❌ Токен не найден');
+        throw Exception('Токен не найден. Пожалуйста, войдите снова.');
+      }
+
+      print('  Token получен: ${token.substring(0, min(20, token.length))}...');
+
+      // Создаем multipart запрос
+      var request = http.MultipartRequest('POST', url);
+
+      // Добавляем заголовки
+      request.headers['Accept'] = 'application/json';
+      request.headers['Authorization'] = 'Bearer $token';
+
+      print('  Headers: ${request.headers}');
+
+      // Добавляем файл
+      var stream = http.ByteStream(
+        DelegatingStream.typed(imageFile.openRead()),
+      );
+      var length = await imageFile.length();
+      var filename = path.basename(imageFile.path);
+
+      print('  File name: $filename');
+      print('  File length: $length bytes');
+
+      var multipartFile = http.MultipartFile(
+        'image',
+        stream,
+        length,
+        filename: filename,
+      );
+
+      request.files.add(multipartFile);
+
+      // Отправляем запрос
+      print('  Отправка запроса...');
+      var response = await request.send();
+      var responseString = await response.stream.bytesToString();
+
+      print('  Response status: ${response.statusCode}');
+      print('  Response headers: ${response.headers}');
+      print('  Response body: $responseString');
+
+      // Обрабатываем как успешные статусы 200 и 201
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          final responseData = json.decode(responseString);
+          print('✅ Work photo uploaded successfully!');
+          print('  Response data: $responseData');
+          return responseData;
+        } catch (e) {
+          print('❌ JSON parsing error: $e');
+          throw Exception('Ошибка обработки ответа: $e');
+        }
+      } else if (response.statusCode == 401) {
+        print('❌ 401 Unauthorized');
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 422) {
+        try {
+          final errorData = json.decode(responseString);
+          print('❌ Validation error: $errorData');
+          final errors = errorData['errors'] ?? {};
+          final errorMessage = errors.isNotEmpty
+              ? 'Ошибка валидации: $errors'
+              : 'Ошибка валидации изображения';
+          throw Exception(errorMessage);
+        } catch (e) {
+          print('❌ Error parsing validation response: $e');
+          throw Exception('Ошибка валидации изображения');
+        }
+      } else if (response.statusCode == 413) {
+        print('❌ 413 Payload Too Large');
+        throw Exception('Файл слишком большой');
+      } else if (response.statusCode == 415) {
+        print('❌ 415 Unsupported Media Type');
+        throw Exception('Неподдерживаемый формат изображения');
+      } else {
+        print('❌ Unexpected error: ${response.statusCode}');
+        throw Exception('Ошибка загрузки: ${response.statusCode}');
+      }
+    } on SocketException catch (e) {
+      print('❌ Network error: $e');
+      throw Exception('Ошибка сети. Проверьте подключение к интернету.');
+    } on TimeoutException catch (e) {
+      print('❌ Timeout error: $e');
+      throw Exception('Превышено время ожидания');
+    } on Exception catch (e) {
+      print('❌ Upload error: $e');
+      rethrow;
+    }
+  }
+
+  static Future<List<WorkPhoto>> getWorkPhotos() async {
+    final url = Uri.parse('$baseUrl/me/master');
+
+    print('=== ПОЛУЧЕНИЕ РАБОТ МАСТЕРА ===');
+    print('  URL: $url');
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        print('❌ Токен не найден');
+        throw Exception('Токен не найден. Пожалуйста, войдите снова.');
+      }
+
+      final headers = {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      print('  Headers: $headers');
+
+      final response = await http.get(url, headers: headers);
+
+      print('  Response status: ${response.statusCode}');
+      print('  Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        final masterData = responseData['data'];
+
+        print('  Master data received: $masterData');
+        print('  Master data type: ${masterData.runtimeType}');
+        print('  Master data keys: ${masterData.keys}');
+
+        // Проверяем, что workPhotos существует
+        if (masterData != null && masterData.containsKey('workPhotos')) {
+          final workPhotos = masterData['workPhotos'];
+
+          print('  workPhotos found: $workPhotos');
+          print('  workPhotos type: ${workPhotos.runtimeType}');
+          print(
+            '  workPhotos length: ${workPhotos is List ? workPhotos.length : "N/A"}',
+          );
+
+          // Проверяем, что workPhotos не null и является списком
+          if (workPhotos is List) {
+            print('  Parsing work photos...');
+            final result = workPhotos.map((photo) {
+              print('    Processing photo: $photo');
+              try {
+                final workPhoto = WorkPhoto.fromJson(photo);
+                print(
+                  '    ✅ Successfully parsed: ID=${workPhoto.id}, Path=${workPhoto.path}',
+                );
+                return workPhoto;
+              } catch (e) {
+                print('    ❌ Error parsing photo: $e');
+                throw e;
+              }
+            }).toList();
+
+            print('✅ Преобразовано ${result.length} фотографий');
+            return result;
+          } else {
+            print(
+              '⚠️ workPhotos не является списком. Тип: ${workPhotos.runtimeType}',
+            );
+            return []; // Возвращаем пустой список
+          }
+        } else {
+          print(
+            '⚠️ workPhotos не найдены в ответе API. Доступные ключи: ${masterData?.keys}',
+          );
+          return []; // Возвращаем пустой список
+        }
+      } else if (response.statusCode == 401) {
+        print('❌ 401 Unauthorized');
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else {
+        print('❌ Ошибка загрузки работ: ${response.statusCode}');
+        throw Exception('Ошибка загрузки работ: ${response.statusCode}');
+      }
+    } on Exception catch (e) {
+      print('❌ Get work photos error: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> deleteWorkPhoto(int id) async {
+    final url = Uri.parse('$baseUrl/me/master/work-photos/$id');
+
+    print('Deleting work photo:');
+    print('  URL: $url');
+    print('  ID: $id');
+
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Токен не найден. Пожалуйста, войдите снова.');
+      }
+
+      final headers = {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.delete(url, headers: headers);
+
+      print('Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('Work photo deleted successfully');
+      } else if (response.statusCode == 401) {
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 404) {
+        throw Exception('Работа не найдена');
+      } else {
+        throw Exception('Ошибка удаления: ${response.statusCode}');
+      }
+    } on Exception catch (e) {
+      print('Delete error: $e');
+      rethrow;
+    }
+  }
+
   // Обновление категории пользователя
   static Future<Map<String, dynamic>> updateCategory({
     required int categoryId,
-    String? patronymic,
-    int? cityId,
-    String? activeMode,
-    String? firstname,
-    String? lastname,
-    String? telephone,
   }) async {
     final url = Uri.parse('$baseUrl/me');
 
@@ -82,18 +310,37 @@ class ApiService {
       final headers = await _getHeaders();
       logApi('Request headers: $headers');
 
-      // Подготавливаем тело запроса
+      final profile = await getProfile();
+      final data = profile['data'];
+
+      logApi('DATA: $data');
+
+      // Формируем полное тело запроса на основе данных профиля
       final body = <String, dynamic>{
-        'category_id': categoryId,
+        'category_id': categoryId, // новая категория
+        // Копируем все существующие поля из профиля
+        'firstname': data['firstname'],
+        'lastname': data['lastname'], // обратите внимание на регистр!
+        'patronymic': data['patronymic'],
+        'telephone': data['telephone'],
+
+        // Для вложенных объектов
+        if (data['city'] != null) 'city_id': data['city']['id'],
+        if (data['category'] != null)
+          'category_id': categoryId, // перезаписываем категорию
+
+        'active_mode':
+            data['activeMode'], // или data['active_mode'] в зависимости от API
+        'description': data['description'],
+        'ttUrl': data['ttUrl'],
+        'instUrl': data['instUrl'],
+
+        // Для массивов
+        'workPhotos': data['workPhotos'] ?? [],
+        'subscriptions': data['subscriptions'] ?? [],
       };
 
-      // Добавляем опциональные поля, если они переданы
-      if (patronymic != null) body['patronymic'] = patronymic;
-      if (cityId != null) body['city_id'] = cityId;
-      if (activeMode != null) body['active_mode'] = activeMode;
-      if (firstname != null) body['firstname'] = firstname;
-      if (lastname != null) body['lastname'] = lastname;
-      if (telephone != null) body['telephone'] = telephone;
+      body.removeWhere((key, value) => value == null);
 
       logApi('Request body: $body');
 
