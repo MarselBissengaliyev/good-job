@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/custom_bottom_navbar.dart';
+import 'package:flutter_application_1/screens/account_page.dart';
 
 import 'edit_portfolio_master_page.dart';
 
@@ -615,108 +617,9 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
       ),
 
       // Bottom Navigation Bar
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(54),
-          topRight: Radius.circular(54),
-        ),
-        child: Container(
-          height: 70,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Работа (активная)
-              GestureDetector(
-                onTap: () {
-                  // Уже на этой странице
-                },
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/work.png',
-                      width: 24,
-                      height: 24,
-                      color: const Color(0xFF0F7EDE),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Работа',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF0F7EDE),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Прайс
-              GestureDetector(
-                onTap: () {
-                  // Навигация на страницу прайса
-                  // Navigator.push(context, MaterialPageRoute(builder: (context) => PricePage()));
-                },
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/price.png',
-                      width: 24,
-                      height: 24,
-                      color: const Color(0xFF5F6368),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Прайс',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Аккаунт
-              GestureDetector(
-                onTap: () {
-                  // Навигация на страницу редактирования портфолио
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const EditPortfolioMasterPage(),
-                    ),
-                  );
-                },
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/account.png',
-                      width: 24,
-                      height: 24,
-                      color: const Color(0xFF5F6368),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Аккаунт',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      bottomNavigationBar: CustomBottomNavBar(
+        activeItem: NavItem.addOrder, // Указываем активную вкладку
+        accountType: AccountType.client,
       ),
     );
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 
+import 'package:flutter_application_1/custom_bottom_navbar.dart';
+import 'package:flutter_application_1/screens/account_page.dart';
+
 class InterestedInOrderPage extends StatelessWidget {
   final Map<String, dynamic> viewer;
   final Map<String, dynamic> order;
@@ -363,90 +366,9 @@ class InterestedInOrderPage extends StatelessWidget {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       // 🔽 Bottom Navigation Bar
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(54),
-          topRight: Radius.circular(54),
-        ),
-        child: Container(
-          height: 70,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Работа
-              GestureDetector(
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/work.png',
-                      width: 24,
-                      height: 24,
-                      color: const Color(0xFF5F6368),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Работа',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Прайс
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/price.png',
-                    width: 24,
-                    height: 24,
-                    color: const Color(0xFF5F6368),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Прайс',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF5F6368),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/account.png',
-                    width: 24,
-                    height: 24,
-                    color: Color(0xFF0F7EDE),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Аккаунт',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF0F7EDE),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+    bottomNavigationBar: CustomBottomNavBar(
+        activeItem: NavItem.account, // Указываем активную вкладку
+        accountType: AccountType.client,
       ),
     );
   }

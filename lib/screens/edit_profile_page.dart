@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/custom_bottom_navbar.dart';
+import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
 import '../services/api_service.dart';
 
@@ -712,9 +714,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
         ],
       ),
-      bottomNavigationBar: _profileMode == ProfileMode.master
-          ? _buildMasterBottomNav()
-          : null,
+      bottomNavigationBar: CustomBottomNavBar(
+        activeItem: NavItem.account, // Указываем активную вкладку
+        accountType: _profileMode == ProfileMode.master
+            ? AccountType.master
+            : AccountType.client,
+      ),
     );
   }
 

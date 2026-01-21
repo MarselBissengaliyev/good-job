@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/models/work-photo.dart';
 import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
 import 'package:flutter_application_1/screens/edit_profile_page.dart';
@@ -53,22 +54,22 @@ class _AccountPageState extends State<AccountPage> {
           _activeMode = userData?['activeMode'] ?? 'client';
           print('Загружены данные пользователя: $userData');
           print('Active mode: $_activeMode');
-          
+
           // Если пользователь мастер - загружаем категории и работы
           if (_isMaster) {
             _loadCategories();
             _loadMasterWorks();
           }
-          
+
           isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки профиля: $e'))
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка загрузки профиля: $e')));
       }
     }
   }
@@ -79,7 +80,7 @@ class _AccountPageState extends State<AccountPage> {
     try {
       setState(() => isLoadingWorks = true);
       final works = await ApiService.getWorkPhotos();
-      
+
       if (mounted) {
         setState(() {
           portfolioImages = works;
@@ -100,9 +101,9 @@ class _AccountPageState extends State<AccountPage> {
 
     try {
       setState(() => isLoadingCategories = true);
-      
+
       final categoriesData = await ApiService.getCategories();
-      
+
       if (mounted) {
         setState(() {
           categories = categoriesData;
@@ -113,7 +114,7 @@ class _AccountPageState extends State<AccountPage> {
       if (mounted) {
         setState(() => isLoadingCategories = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки категорий: $e'))
+          SnackBar(content: Text('Ошибка загрузки категорий: $e')),
         );
       }
     }
@@ -122,38 +123,38 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _updateUserCategory(int categoryId) async {
     try {
       setState(() => isLoading = true);
-      
+
       final response = await ApiService.updateUserCategory(categoryId);
-      
+
       if (mounted) {
         setState(() {
           // Обновляем данные пользователя
           if (userData != null && response['data'] != null) {
             userData!['category'] = response['data']['category'];
           }
-          
+
           // Находим выбранную категорию для отображения
           final selectedCategoryData = categories.firstWhere(
             (cat) => cat['id'] == categoryId,
             orElse: () => null,
           );
-          
+
           if (selectedCategoryData != null) {
             selectedCategory = selectedCategoryData['name'];
           }
-          
+
           isLoading = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Категория успешно обновлена'))
+          const SnackBar(content: Text('Категория успешно обновлена')),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления категории: $e'))
+          SnackBar(content: Text('Ошибка обновления категории: $e')),
         );
       }
     }
@@ -192,7 +193,12 @@ class _AccountPageState extends State<AccountPage> {
       body: isLoading
           ? _buildLoadingState()
           : (_isMaster ? _buildMasterContent() : _buildClientContent()),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: CustomBottomNavBar(
+        activeItem: NavItem.account, // Указываем активную вкладку
+        accountType: _activeMode == 'master'
+            ? AccountType.master
+            : AccountType.client,
+      ),
     );
   }
 
@@ -465,7 +471,7 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Поле поиска (опционально)
                   Container(
                     height: 48,
@@ -477,82 +483,97 @@ class _AccountPageState extends State<AccountPage> {
                       decoration: InputDecoration(
                         hintText: 'Поиск категорий...',
                         hintStyle: const TextStyle(color: Color(0xFF9AA0A6)),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF9AA0A6)),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Color(0xFF9AA0A6),
+                        ),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Список категорий
                   Expanded(
                     child: isLoadingCategories
                         ? const Center(
                             child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F7EDE)),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF0F7EDE),
+                              ),
                             ),
                           )
                         : categories.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'Категории не найдены',
-                                  style: TextStyle(
-                                    color: Color(0xFF9AA0A6),
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                itemCount: categories.length,
-                                itemBuilder: (context, index) {
-                                  final category = categories[index];
-                                  final isSelected = userData?['category']?['id'] == category['id'];
-                                  
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () async {
-                                        Navigator.pop(context);
-                                        await _updateUserCategory(category['id']);
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 16),
-                                        decoration: BoxDecoration(
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Colors.grey.shade200,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                category['name'] ?? 'Без названия',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                                  color: isSelected ? const Color(0xFF0F7EDE) : const Color(0xFF41454A),
-                                                  fontFamily: 'Plus Jakarta Sans',
-                                                ),
-                                              ),
-                                            ),
-                                            if (isSelected)
-                                              const Icon(
-                                                Icons.check,
-                                                color: Color(0xFF0F7EDE),
-                                                size: 20,
-                                              ),
-                                          ],
+                        ? const Center(
+                            child: Text(
+                              'Категории не найдены',
+                              style: TextStyle(
+                                color: Color(0xFF9AA0A6),
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: categories.length,
+                            itemBuilder: (context, index) {
+                              final category = categories[index];
+                              final isSelected =
+                                  userData?['category']?['id'] ==
+                                  category['id'];
+
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _updateUserCategory(category['id']);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: Colors.grey.shade200,
                                         ),
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            category['name'] ?? 'Без названия',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                              color: isSelected
+                                                  ? const Color(0xFF0F7EDE)
+                                                  : const Color(0xFF41454A),
+                                              fontFamily: 'Plus Jakarta Sans',
+                                            ),
+                                          ),
+                                        ),
+                                        if (isSelected)
+                                          const Icon(
+                                            Icons.check,
+                                            color: Color(0xFF0F7EDE),
+                                            size: 20,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
-                  
+
                   // Кнопка закрытия
                   const SizedBox(height: 16),
                   SizedBox(
@@ -823,32 +844,22 @@ class _AccountPageState extends State<AccountPage> {
           ],
         ),
         const SizedBox(height: 16),
-        
+
         // Отображение работ в виде сетки
         if (portfolioImages.isEmpty && !isLoadingWorks)
           Center(
             child: Column(
               children: [
-                Icon(
-                  Icons.photo_library,
-                  size: 60,
-                  color: Colors.grey[300],
-                ),
+                Icon(Icons.photo_library, size: 60, color: Colors.grey[300]),
                 const SizedBox(height: 12),
                 const Text(
                   'Нет загруженных работ',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Нажмите + чтобы добавить первую работу',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
@@ -869,10 +880,18 @@ class _AccountPageState extends State<AccountPage> {
               BorderRadius radius = BorderRadius.zero;
 
               // Определяем скругления углов
-              if (index == 0) radius = const BorderRadius.only(topLeft: Radius.circular(r));
-              else if (index == 2) radius = const BorderRadius.only(topRight: Radius.circular(r));
-              else if (index == 6) radius = const BorderRadius.only(bottomLeft: Radius.circular(r));
-              else if (index == 8) radius = const BorderRadius.only(bottomRight: Radius.circular(r));
+              if (index == 0)
+                radius = const BorderRadius.only(topLeft: Radius.circular(r));
+              else if (index == 2)
+                radius = const BorderRadius.only(topRight: Radius.circular(r));
+              else if (index == 6)
+                radius = const BorderRadius.only(
+                  bottomLeft: Radius.circular(r),
+                );
+              else if (index == 8)
+                radius = const BorderRadius.only(
+                  bottomRight: Radius.circular(r),
+                );
 
               // Кнопка добавления (последняя ячейка)
               if (index == portfolioImages.length) {
@@ -945,9 +964,7 @@ class _AccountPageState extends State<AccountPage> {
   void _openEditPortfolioPage() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const EditPortfolioMasterPage(),
-      ),
+      MaterialPageRoute(builder: (context) => const EditPortfolioMasterPage()),
     ).then((_) {
       // Обновляем список работ после возвращения со страницы редактирования
       if (mounted) {
@@ -997,61 +1014,6 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    final isAccountActive = true;
-    final workColor = isAccountActive
-        ? const Color(0xFF5F6368)
-        : const Color(0xFF0F7EDE);
-    final priceColor = const Color(0xFF5F6368);
-    final accountColor = isAccountActive
-        ? const Color(0xFF0F7EDE)
-        : const Color(0xFF5F6368);
-
-    return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(54),
-        topRight: Radius.circular(54),
-      ),
-      child: Container(
-        height: 70,
-        color: Colors.white,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _navItem('assets/work.png', 'Работа', workColor, () {
-              Navigator.pushReplacementNamed(context, '/work');
-            }),
-            _navItem('assets/price.png', 'Прайс', priceColor, () {
-              Navigator.pushReplacementNamed(context, '/price');
-            }),
-            _navItem('assets/account.png', 'Аккаунт', accountColor, () {}),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navItem(String icon, String label, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Image.asset(icon, width: 24, height: 24, color: color),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: color,
-              fontFamily: 'Plus Jakarta Sans',
-            ),
-          ),
-        ],
       ),
     );
   }
