@@ -66,6 +66,65 @@ class ApiService {
     }
   }
 
+  // В файле api_service.dart добавьте этот метод
+  static Future<Map<String, dynamic>> getOrders({
+    int? page,
+    int? perPage,
+  }) async {
+    final url = Uri.parse('$baseUrl/orders');
+
+    logApi('Getting orders:');
+    logApi('  URL: $url');
+    logApi('  Page: $page');
+    logApi('  Per page: $perPage');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      // Добавляем query параметры, если они есть
+      final Map<String, String> queryParams = {};
+      if (page != null) queryParams['page'] = page.toString();
+      if (perPage != null) queryParams['per_page'] = perPage.toString();
+
+      final response = await http
+          .get(url.replace(queryParameters: queryParams), headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          logApi('Orders loaded successfully');
+          logApi('Orders count: ${data['data']?.length ?? 0}');
+          return data;
+        } catch (e) {
+          logApi('JSON parsing error: $e', isError: true);
+          throw Exception('Failed to parse orders response: $e');
+        }
+      } else if (response.statusCode == 401) {
+        logApi('Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else {
+        logApi(
+          'Failed to load orders, status: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception('Failed to load orders: ${response.statusCode}');
+      }
+    } on TimeoutException catch (e) {
+      logApi('Request timeout: $e', isError: true);
+      throw Exception('Превышено время ожидания при загрузке заказов');
+    } catch (e, stackTrace) {
+      logApi('Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> uploadWorkPhoto(File imageFile) async {
     final url = Uri.parse('$baseUrl/me/master/work-photos');
 

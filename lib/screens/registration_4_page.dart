@@ -39,7 +39,7 @@ class _Registration4PageState extends State<Registration4Page> {
     super.initState();
     _remainingSeconds = widget.codeTtl;
     _startTimer();
-    _fetchDebugInfo(); // Просто загружаем данные в память, не заполняя поля автоматически
+    _fetchDebugInfo();
   }
 
   Future<void> _fetchDebugInfo() async {
@@ -51,6 +51,15 @@ class _Registration4PageState extends State<Registration4Page> {
       });
       print('[DEBUG] Получен код для проверки: $_expectedCode');
       print('[DEBUG] Payload: $_serverPayload');
+      
+      // Автоматически заполняем поле кодом (для тестирования)
+      if (_expectedCode != null && _expectedCode!.length == 4) {
+        for (int i = 0; i < 4; i++) {
+          _controllers[i].text = _expectedCode![i];
+        }
+        // Переводим фокус на последнее поле
+        _focusNodes[3].requestFocus();
+      }
     }
   }
 
@@ -196,6 +205,59 @@ class _Registration4PageState extends State<Registration4Page> {
                     ),
                     const SizedBox(height: 24),
                     _buildTimerOrResend(),
+                    
+                    // Отображение тестового кода (только если есть)
+                    if (_expectedCode != null) ...[
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          children: [
+                            const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline, color: Colors.blue, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'ТЕСТОВЫЙ РЕЖИМ',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Код для ввода: $_expectedCode',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green,
+                              ),
+                            ),
+                            if (_serverPayload != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Payload: ${_serverPayload.toString()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

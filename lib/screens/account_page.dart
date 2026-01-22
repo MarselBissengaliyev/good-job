@@ -26,7 +26,7 @@ class _AccountPageState extends State<AccountPage> {
   bool isLoadingWorks = false;
   List<WorkPhoto> portfolioImages = []; // Для мастеров - реальные работы
   String? selectedCategory; // Для мастеров
-  String? _activeMode; // Храним режим пользователя
+  dynamic _activeMode; // Храним режим пользователя
   List<dynamic> categories = [];
   bool isLoadingCategories = false;
 
@@ -51,7 +51,11 @@ class _AccountPageState extends State<AccountPage> {
       if (mounted) {
         setState(() {
           userData = response['data'];
-          _activeMode = userData?['activeMode'] ?? 'client';
+          final activeValue = userData?['activeMode'];
+
+          if (activeValue != null) {
+            _activeMode = activeValue;
+          }
           print('Загружены данные пользователя: $userData');
           print('Active mode: $_activeMode');
 
@@ -162,6 +166,13 @@ class _AccountPageState extends State<AccountPage> {
 
   bool get _isMaster => _activeMode == 'master';
 
+  // Метод для определения типа аккаунта для bottom navigation
+  AccountType? get _accountTypeForNavBar {
+    if (_activeMode == null) return null; // Еще загружается
+    if (_activeMode == 'master') return AccountType.master;
+    return AccountType.client;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,12 +204,12 @@ class _AccountPageState extends State<AccountPage> {
       body: isLoading
           ? _buildLoadingState()
           : (_isMaster ? _buildMasterContent() : _buildClientContent()),
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.account, // Указываем активную вкладку
-        accountType: _activeMode == 'master'
-            ? AccountType.master
-            : AccountType.client,
-      ),
+      bottomNavigationBar: _accountTypeForNavBar == null
+          ? null // Пока не определился тип аккаунта, не показываем навигацию
+          : CustomBottomNavBar(
+              activeItem: NavItem.account,
+              accountType: _accountTypeForNavBar!,
+            ),
     );
   }
 

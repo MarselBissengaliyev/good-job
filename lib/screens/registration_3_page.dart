@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/screens/login_page.dart';
 import 'package:provider/provider.dart';
 
 import '../models/city.dart';
@@ -29,8 +30,12 @@ class _Registration3PageState extends State<Registration3Page> {
   // Список городов из API
   List<City> _cities = [];
 
+  final FocusNode _nameFocusNode = FocusNode();
+  final FocusNode _surnameFocusNode = FocusNode();
   final FocusNode _phoneFocusNode = FocusNode();
-  bool _phoneHasError = false;
+
+  // Для управления прокруткой
+  final ScrollController _scrollController = ScrollController();
 
   bool get isFormValid {
     return nameController.text.isNotEmpty &&
@@ -39,10 +44,42 @@ class _Registration3PageState extends State<Registration3Page> {
         selectedCityId != null;
   }
 
+  @override
   void initState() {
     super.initState();
     // Загружаем города при инициализации
     _loadCities();
+
+    // Добавляем слушатели фокуса для автоматической прокрутки
+    _nameFocusNode.addListener(_handleFocusChange);
+    _surnameFocusNode.addListener(_handleFocusChange);
+    _phoneFocusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _nameFocusNode.dispose();
+    _surnameFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (_nameFocusNode.hasFocus ||
+        _surnameFocusNode.hasFocus ||
+        _phoneFocusNode.hasFocus) {
+      // Небольшая задержка, чтобы клавиатура успела появиться
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
   }
 
   Future<void> _loadCities() async {
@@ -265,7 +302,6 @@ class _Registration3PageState extends State<Registration3Page> {
       _isLoading = true;
       _errorMessage = null;
       _fieldErrors = null;
-      _phoneHasError = false;
     });
 
     try {
@@ -398,538 +434,637 @@ class _Registration3PageState extends State<Registration3Page> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Верхняя панель
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new),
-                    onPressed: _isLoading ? null : () => Navigator.pop(context),
-                  ),
-                  const Spacer(),
-                  Image.asset('assets/logo.png', height: 28),
-                  const Spacer(flex: 2),
-                ],
-              ),
-            ),
-
-            // Форма регистрации
-            Expanded(
-              child: SingleChildScrollView(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              controller: _scrollController,
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text(
-                        'Регистрация',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Plus Jakarta Sans',
+                      // Верхняя панель с логотипом
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24.0,
+                          vertical: 16,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-
-                      Text(
-                        roleProvider.isMasterSelected
-                            ? 'Регистрация для мастера'
-                            : 'Регистрация для клиента',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                          fontFamily: 'Plus Jakarta Sans',
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_ios_new),
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => Navigator.pop(context),
+                            ),
+                            const Spacer(),
+                            Image.asset('assets/logo.png', height: 28),
+                            const Spacer(flex: 2),
+                          ],
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Поле имени
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: nameController,
-                            onChanged: (_) {
-                              setState(() {
-                                // Очищаем ошибку поля при изменении
-                                if (_fieldErrors != null) {
-                                  _fieldErrors!.remove('firstname');
-                                }
-                              });
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Имя',
-                              labelStyle: const TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
-                                color: Colors.grey,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 16,
-                            ),
-                          ),
-                          _buildFieldError('Имя'),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Поле фамилии
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: surnameController,
-                            onChanged: (_) {
-                              setState(() {
-                                if (_fieldErrors != null) {
-                                  _fieldErrors!.remove('lastname');
-                                }
-                              });
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Фамилия',
-                              labelStyle: const TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
-                                color: Colors.grey,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 16,
-                            ),
-                          ),
-                          _buildFieldError('Фамилия'),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Выбор города
-                      // В методе build, в секции "Выбор города":
-                      // Выбор города
-                      // Выбор города
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_loadingCities)
-                            // Показать индикатор загрузки
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 20,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  const SizedBox(width: 8),
-                                  const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  const Text(
-                                    'Загрузка городов...',
-                                    style: TextStyle(
-                                      fontFamily: 'Plus Jakarta Sans',
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else if (_cities.isEmpty)
-                            // Показать сообщение об ошибке
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 20,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Не удалось загрузить города',
-                                    style: TextStyle(
-                                      fontFamily: 'Plus Jakarta Sans',
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  GestureDetector(
-                                    onTap: _loadCities,
-                                    child: const Text(
-                                      'Попробовать снова',
-                                      style: TextStyle(
-                                        fontFamily: 'Plus Jakarta Sans',
-                                        color: Colors.blue,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            // Показать нормальный выпадающий список
-                            Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: _getFieldError('Город') != null
-                                      ? Colors.red
-                                      : Colors.grey.shade400,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButtonFormField<int>(
-                                  value: selectedCityId,
-                                  onChanged: (value) {
-                                    print('[DEBUG] Выбран город с ID: $value');
-                                    setState(() {
-                                      selectedCityId = value;
-                                      if (_fieldErrors != null) {
-                                        _fieldErrors!.remove('city_id');
-                                      }
-                                    });
-                                  },
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    labelText: 'Город',
-                                    labelStyle: TextStyle(
-                                      fontFamily: 'Plus Jakarta Sans',
-                                      color: _getFieldError('Город') != null
-                                          ? Colors.red
-                                          : Colors.grey,
-                                    ),
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 16,
-                                    ),
-                                    suffixIcon: const Icon(
-                                      Icons.arrow_drop_down,
-                                    ),
-                                  ),
-                                  style: const TextStyle(
-                                    fontFamily: 'Plus Jakarta Sans',
-                                    fontSize: 16,
-                                    color: Colors.black,
-                                  ),
-                                  icon: const SizedBox.shrink(),
-                                  borderRadius: BorderRadius.circular(12),
-                                  // Добавляем placeholder текст
-                                  hint: selectedCityId == null
-                                      ? const Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 8.0,
-                                          ),
-                                          child: Text(
-                                            'Выберите город',
-                                            style: TextStyle(
-                                              fontFamily: 'Plus Jakarta Sans',
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                                  items: _cities.map((city) {
-                                    return DropdownMenuItem<int>(
-                                      value: city.id,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8.0,
-                                        ),
-                                        child: Text(
-                                          city.name,
-                                          style: const TextStyle(
-                                            fontFamily: 'Plus Jakarta Sans',
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ),
-                          _buildFieldError('Город'),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Поле телефона
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: phoneController,
-                            focusNode: _phoneFocusNode,
-                            onChanged: (_) {
-                              setState(() {
-                                _phoneHasError = false;
-                                if (_fieldErrors != null) {
-                                  _fieldErrors!.remove('telephone');
-                                }
-                              });
-                            },
-                            keyboardType: TextInputType.phone,
-                            decoration: InputDecoration(
-                              labelText: 'Телефон',
-                              labelStyle: TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
-                                color: _phoneHasError
-                                    ? Colors.red
-                                    : Colors.grey,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                              helperStyle: TextStyle(
-                                fontSize: 12,
-                                color: _phoneHasError
-                                    ? Colors.red
-                                    : Colors.grey,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          _buildFieldError('Телефон'),
-                        ],
                       ),
 
-                      // Общая ошибка
-                      if (_errorMessage != null &&
-                          (_fieldErrors == null || _fieldErrors!.isEmpty))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFEBEE),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.red.shade300),
+                      // Основной контент формы
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
                             ),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'Ошибка',
-                                      style: TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        fontFamily: 'Plus Jakarta Sans',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 13,
+                                const Text(
+                                  'Регистрация',
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
                                     fontFamily: 'Plus Jakarta Sans',
                                   ),
+                                  textAlign: TextAlign.center,
                                 ),
+                                const SizedBox(height: 8),
+
+                                Text(
+                                  roleProvider.isMasterSelected
+                                      ? 'Регистрация для мастера'
+                                      : 'Регистрация для клиента',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey,
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 32),
+
+                                // Поле имени
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextField(
+                                      controller: nameController,
+                                      focusNode: _nameFocusNode,
+                                      onChanged: (_) {
+                                        setState(() {
+                                          // Очищаем ошибку поля при изменении
+                                          if (_fieldErrors != null) {
+                                            _fieldErrors!.remove('firstname');
+                                          }
+                                        });
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Имя',
+                                        labelStyle: const TextStyle(
+                                          fontFamily: 'Plus Jakarta Sans',
+                                          color: Colors.grey,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        errorBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        focusedErrorBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 16,
+                                            ),
+                                      ),
+                                      style: const TextStyle(
+                                        fontFamily: 'Plus Jakarta Sans',
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    _buildFieldError('Имя'),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Поле фамилии
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextField(
+                                      controller: surnameController,
+                                      focusNode: _surnameFocusNode,
+                                      onChanged: (_) {
+                                        setState(() {
+                                          if (_fieldErrors != null) {
+                                            _fieldErrors!.remove('lastname');
+                                          }
+                                        });
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Фамилия',
+                                        labelStyle: const TextStyle(
+                                          fontFamily: 'Plus Jakarta Sans',
+                                          color: Colors.grey,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        errorBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        focusedErrorBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 16,
+                                            ),
+                                      ),
+                                      style: const TextStyle(
+                                        fontFamily: 'Plus Jakarta Sans',
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    _buildFieldError('Фамилия'),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Выбор города
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (_loadingCities)
+                                      // Показать индикатор загрузки
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 20,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const SizedBox(width: 8),
+                                            const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            const Text(
+                                              'Загрузка городов...',
+                                              style: TextStyle(
+                                                fontFamily: 'Plus Jakarta Sans',
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    else if (_cities.isEmpty)
+                                      // Показать сообщение об ошибке
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 20,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Не удалось загрузить города',
+                                              style: TextStyle(
+                                                fontFamily: 'Plus Jakarta Sans',
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            GestureDetector(
+                                              onTap: _loadCities,
+                                              child: const Text(
+                                                'Попробовать снова',
+                                                style: TextStyle(
+                                                  fontFamily:
+                                                      'Plus Jakarta Sans',
+                                                  color: Colors.blue,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    else
+                                      // Показать нормальный выпадающий список
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color:
+                                                _getFieldError('Город') != null
+                                                ? Colors.red
+                                                : Colors.grey.shade400,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButtonFormField<int>(
+                                            value: selectedCityId,
+                                            onChanged: (value) {
+                                              print(
+                                                '[DEBUG] Выбран город с ID: $value',
+                                              );
+                                              setState(() {
+                                                selectedCityId = value;
+                                                if (_fieldErrors != null) {
+                                                  _fieldErrors!.remove(
+                                                    'city_id',
+                                                  );
+                                                }
+                                              });
+                                            },
+                                            isExpanded: true,
+                                            decoration: InputDecoration(
+                                              labelText: 'Город',
+                                              labelStyle: TextStyle(
+                                                fontFamily: 'Plus Jakarta Sans',
+                                                color:
+                                                    _getFieldError('Город') !=
+                                                        null
+                                                    ? Colors.red
+                                                    : Colors.grey,
+                                              ),
+                                              border: InputBorder.none,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 16,
+                                                  ),
+                                              suffixIcon: const Icon(
+                                                Icons.arrow_drop_down,
+                                              ),
+                                            ),
+                                            style: const TextStyle(
+                                              fontFamily: 'Plus Jakarta Sans',
+                                              fontSize: 16,
+                                              color: Colors.black,
+                                            ),
+                                            icon: const SizedBox.shrink(),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            // Добавляем placeholder текст
+                                            hint: selectedCityId == null
+                                                ? const Padding(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                          horizontal: 8.0,
+                                                        ),
+                                                    child: Text(
+                                                      'Выберите город',
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            'Plus Jakarta Sans',
+                                                        color: Colors.grey,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : null,
+                                            items: _cities.map((city) {
+                                              return DropdownMenuItem<int>(
+                                                value: city.id,
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8.0,
+                                                      ),
+                                                  child: Text(
+                                                    city.name,
+                                                    style: const TextStyle(
+                                                      fontFamily:
+                                                          'Plus Jakarta Sans',
+                                                      color: Colors.black,
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                      ),
+                                    _buildFieldError('Город'),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Поле телефона
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextField(
+                                      controller: phoneController,
+                                      focusNode: _phoneFocusNode,
+                                      onChanged: (_) {
+                                        setState(() {
+                                          if (_fieldErrors != null) {
+                                            _fieldErrors!.remove('telephone');
+                                          }
+                                        });
+                                      },
+                                      keyboardType: TextInputType.phone,
+                                      decoration: InputDecoration(
+                                        labelText: 'Телефон',
+                                        labelStyle: const TextStyle(
+                                          fontFamily: 'Plus Jakarta Sans',
+                                          color: Colors.grey,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        errorBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        focusedErrorBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 16,
+                                            ),
+                                        helperStyle: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      style: const TextStyle(
+                                        fontFamily: 'Plus Jakarta Sans',
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    _buildFieldError('Телефон'),
+                                  ],
+                                ),
+
+                                // Общая ошибка
+                                if (_errorMessage != null &&
+                                    (_fieldErrors == null ||
+                                        _fieldErrors!.isEmpty))
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 16),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFEBEE),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.red.shade300,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.error_outline,
+                                                color: Colors.red,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                'Ошибка',
+                                                style: TextStyle(
+                                                  color: Colors.red,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                  fontFamily:
+                                                      'Plus Jakarta Sans',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            _errorMessage!,
+                                            style: const TextStyle(
+                                              color: Colors.red,
+                                              fontSize: 13,
+                                              fontFamily: 'Plus Jakarta Sans',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                const SizedBox(height: 24),
+
+                                // Соглашение
+                                const Text(
+                                  'Создавая аккаунт, вы принимаете',
+                                  style: TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                GestureDetector(
+                                  onTap: () {
+                                    print('[DEBUG] Открытие договора офферты');
+                                    // TODO: Открыть договор
+                                  },
+                                  child: const Text(
+                                    'Договор публичной офферты',
+                                    style: TextStyle(
+                                      fontFamily: 'Plus Jakarta Sans',
+                                      fontSize: 14,
+                                      color: Colors.blue,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                const SizedBox(height: 32),
                               ],
                             ),
                           ),
                         ),
-
-                      const SizedBox(height: 24),
-
-                      // Соглашение
-                      const Text(
-                        'Создавая аккаунт, вы принимаете',
-                        style: TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                        textAlign: TextAlign.center,
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          print('[DEBUG] Открытие договора офферты');
-                          // TODO: Открыть договор
-                        },
-                        child: const Text(
-                          'Договор публичной офферты',
-                          style: TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            fontSize: 14,
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
+
+                      // Фиксированная область с кнопками
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24.0,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAFAFA),
+                          border: Border(
+                            top: BorderSide(
+                              color: Colors.grey.shade300,
+                              width: 1,
+                            ),
                           ),
-                          textAlign: TextAlign.center,
+                        ),
+                        child: Column(
+                          children: [
+                            // Кнопка регистрации
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: isFormValid && !_isLoading
+                                    ? () => _registerUser(context)
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isFormValid && !_isLoading
+                                      ? const Color(0xFF0F7EDE)
+                                      : const Color(0xFFBABABA),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation(
+                                            Colors.white,
+                                          ),
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Получить код подтверждения',
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontFamily: 'Plus Jakarta Sans',
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            const Text(
+                              'или',
+                              style: TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Кнопка входа
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: OutlinedButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const LoginPage(),
+                                          ),
+                                        );
+                                      },
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(
+                                    color: Color(0xFF0F7EDE),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Войти',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    color: Color(0xFF0F7EDE),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
-
-            // Кнопки
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                children: [
-                  // Кнопка регистрации
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: isFormValid && !_isLoading
-                          ? () => _registerUser(context)
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isFormValid && !_isLoading
-                            ? const Color(0xFF0F7EDE)
-                            : const Color(0xFFBABABA),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : const Text(
-                              'Получить код подтверждения',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontFamily: 'Plus Jakarta Sans',
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  const Text(
-                    'или',
-                    style: TextStyle(
-                      fontFamily: 'Plus Jakarta Sans',
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Кнопка входа
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              print('[DEBUG] Переход к экрану входа');
-                              // TODO: Переход на экран входа
-                            },
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF0F7EDE)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Войти',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontFamily: 'Plus Jakarta Sans',
-                          color: Color(0xFF0F7EDE),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
