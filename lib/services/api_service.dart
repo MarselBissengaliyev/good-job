@@ -355,6 +355,230 @@ class ApiService {
     }
   }
 
+  // Добавьте этот метод в ваш ApiService
+  static Future<Map<String, dynamic>> updateClientOrder({
+    required String orderId,
+    String? title,
+    String? description,
+    String? status,
+  }) async {
+    final url = Uri.parse('$baseUrl/me/client/orders/$orderId');
+
+    logApi('Updating client order:');
+    logApi('  URL: $url');
+    logApi('  Order ID: $orderId');
+    logApi('  Title: $title');
+    logApi(
+      '  Description: ${description != null ? "Provided" : "Not provided"}',
+    );
+    logApi('  Status: $status');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      final body = <String, dynamic>{};
+
+      if (title != null && title.isNotEmpty) {
+        body['title'] = title;
+      }
+
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }
+
+      if (status != null && status.isNotEmpty) {
+        body['status'] = status;
+      }
+
+      logApi('Request body: $body');
+
+      final response = await http
+          .put(url, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          logApi('✅ Order updated successfully');
+          logApi('Updated order data: $responseData');
+          return responseData;
+        } catch (e) {
+          logApi('❌ JSON parsing error: $e', isError: true);
+          throw Exception('Не удалось обработать ответ сервера');
+        }
+      } else if (response.statusCode == 401) {
+        logApi('❌ Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 422) {
+        try {
+          final errorData = jsonDecode(response.body);
+          logApi('❌ Validation error: $errorData', isError: true);
+
+          String errorMessage = 'Ошибка валидации данных:';
+          final errors = errorData['errors'] ?? {};
+
+          errors.forEach((field, messages) {
+            if (messages is List) {
+              errorMessage += '\n• $field: ${messages.join(', ')}';
+            }
+          });
+
+          throw Exception(errorMessage);
+        } catch (e) {
+          logApi('❌ Error parsing validation response: $e', isError: true);
+          throw Exception('Ошибка валидации данных');
+        }
+      } else if (response.statusCode == 404) {
+        logApi('❌ Order not found', isError: true);
+        throw Exception('Заказ не найден');
+      } else {
+        logApi(
+          '❌ Failed to update order: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception(
+          'Не удалось обновить заказ. Код ошибки: ${response.statusCode}',
+        );
+      }
+    } on TimeoutException catch (e) {
+      logApi('❌ Request timeout: $e', isError: true);
+      throw Exception(
+        'Превышено время ожидания. Проверьте подключение к интернету.',
+      );
+    } on SocketException catch (e) {
+      logApi('❌ Network error: $e', isError: true);
+      throw Exception('Ошибка сети. Проверьте подключение к интернету.');
+    } catch (e, stackTrace) {
+      logApi('❌ Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
+  // Добавьте этот метод в ваш ApiService
+  static Future<void> deleteOrder(int orderId) async {
+    final url = Uri.parse('$baseUrl/orders/$orderId');
+
+    logApi('Deleting order:');
+    logApi('  URL: $url');
+    logApi('  Order ID: $orderId');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      final response = await http
+          .delete(url, headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          logApi('✅ Order deleted successfully');
+          logApi('Response data: $responseData');
+          // Если сервер возвращает количество удаленных записей
+          final count = responseData['count'] ?? 0;
+          if (count > 0) {
+            logApi('Deleted $count order(s)');
+          }
+        } catch (e) {
+          logApi('✅ Order deleted (unable to parse response)');
+        }
+      } else if (response.statusCode == 401) {
+        logApi('❌ Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 403) {
+        logApi('❌ Forbidden - insufficient permissions', isError: true);
+        throw Exception('Недостаточно прав для удаления этого заказа');
+      } else if (response.statusCode == 404) {
+        logApi('❌ Order not found', isError: true);
+        throw Exception('Заказ не найден');
+      } else {
+        logApi(
+          '❌ Failed to delete order: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception(
+          'Не удалось удалить заказ. Код ошибки: ${response.statusCode}',
+        );
+      }
+    } on TimeoutException catch (e) {
+      logApi('❌ Request timeout: $e', isError: true);
+      throw Exception(
+        'Превышено время ожидания. Проверьте подключение к интернету.',
+      );
+    } on SocketException catch (e) {
+      logApi('❌ Network error: $e', isError: true);
+      throw Exception('Ошибка сети. Проверьте подключение к интернету.');
+    } catch (e, stackTrace) {
+      logApi('❌ Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
+  // Метод для получения конкретного заказа
+  static Future<Map<String, dynamic>> getOrderById(String orderId) async {
+    final url = Uri.parse('$baseUrl/orders/$orderId');
+
+    logApi('Getting order by ID:');
+    logApi('  URL: $url');
+    logApi('  Order ID: $orderId');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          logApi('Order loaded successfully');
+          logApi('Order data: ${responseData['data']}');
+          return responseData;
+        } catch (e) {
+          logApi('JSON parsing error: $e', isError: true);
+          throw Exception('Failed to parse order response: $e');
+        }
+      } else if (response.statusCode == 401) {
+        logApi('Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 404) {
+        logApi('Order not found', isError: true);
+        throw Exception('Заказ не найден');
+      } else {
+        logApi(
+          'Failed to load order, status: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception('Failed to load order: ${response.statusCode}');
+      }
+    } on TimeoutException catch (e) {
+      logApi('Request timeout: $e', isError: true);
+      throw Exception('Превышено время ожидания при загрузке заказа');
+    } catch (e, stackTrace) {
+      logApi('Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
   // Обновление категории пользователя
   static Future<Map<String, dynamic>> updateCategory({
     required int categoryId,
@@ -1356,6 +1580,332 @@ class ApiService {
       throw Exception('Превышено время ожидания');
     } catch (e, stackTrace) {
       logApi('Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
+  // Загрузка изображений для заказа
+  static Future<List<String>> uploadOrderImages(List<File> imageFiles) async {
+    logApi('Uploading order images:');
+    logApi('  Image count: ${imageFiles.length}');
+
+    final List<String> imagePaths = [];
+
+    for (var imageFile in imageFiles) {
+      try {
+        final url = Uri.parse('$baseUrl/orders/images');
+
+        print('Uploading image: ${imageFile.path}');
+        print('  File size: ${imageFile.lengthSync()} bytes');
+
+        final token = await AuthService.getToken();
+        if (token == null) {
+          throw Exception('Токен не найден. Пожалуйста, войдите снова.');
+        }
+
+        // Создаем multipart запрос
+        var request = http.MultipartRequest('POST', url);
+        request.headers['Accept'] = 'application/json';
+        request.headers['Authorization'] = 'Bearer $token';
+
+        // Добавляем файл
+        var stream = http.ByteStream(
+          DelegatingStream.typed(imageFile.openRead()),
+        );
+        var length = await imageFile.length();
+        var filename = path.basename(imageFile.path);
+
+        var multipartFile = http.MultipartFile(
+          'image',
+          stream,
+          length,
+          filename: filename,
+        );
+
+        request.files.add(multipartFile);
+
+        // Отправляем запрос
+        var response = await request.send();
+        var responseString = await response.stream.bytesToString();
+
+        logApi('Response status: ${response.statusCode}');
+        logApi('Response body: $responseString');
+
+        if (response.statusCode == 200) {
+          try {
+            final responseData = json.decode(responseString);
+            final imagePath = responseData['path'] as String?;
+
+            if (imagePath != null && imagePath.isNotEmpty) {
+              logApi('✅ Image uploaded successfully. Path: $imagePath');
+              imagePaths.add(imagePath);
+            } else {
+              throw Exception('Путь к изображению не получен от сервера');
+            }
+          } catch (e) {
+            logApi('❌ JSON parsing error: $e', isError: true);
+            throw Exception('Ошибка обработки ответа: $e');
+          }
+        } else if (response.statusCode == 401) {
+          logApi('❌ 401 Unauthorized', isError: true);
+          await AuthService.clearAuthData();
+          throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+        } else if (response.statusCode == 422) {
+          try {
+            final errorData = json.decode(responseString);
+            logApi('❌ Validation error: $errorData', isError: true);
+            throw Exception('Ошибка валидации изображения');
+          } catch (e) {
+            throw Exception('Ошибка валидации изображения');
+          }
+        } else {
+          logApi('❌ Unexpected error: ${response.statusCode}', isError: true);
+          throw Exception(
+            'Ошибка загрузки изображения: ${response.statusCode}',
+          );
+        }
+      } on SocketException catch (e) {
+        logApi('❌ Network error: $e', isError: true);
+        throw Exception('Ошибка сети. Проверьте подключение к интернету.');
+      } on TimeoutException catch (e) {
+        logApi('❌ Timeout error: $e', isError: true);
+        throw Exception('Превышено время ожидания');
+      } on Exception catch (e) {
+        logApi('❌ Upload error: $e', isError: true);
+        rethrow;
+      }
+    }
+
+    return imagePaths;
+  }
+
+  // Метод для изменения статуса заказа
+  static Future<void> changeOrderStatus({
+    required String orderId,
+    required String status, // 'active', 'canceled', 'archived'
+  }) async {
+    final url = Uri.parse('$baseUrl/me/client/orders/$orderId');
+
+    logApi('Changing order status:');
+    logApi('  URL: $url');
+    logApi('  Order ID: $orderId');
+    logApi('  New status: $status');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      final body = {'status': status};
+      logApi('Request body: $body');
+
+      final response = await http
+          .put(url, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        logApi('✅ Order status changed successfully');
+      } else if (response.statusCode == 401) {
+        logApi('❌ Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 422) {
+        try {
+          final errorData = jsonDecode(response.body);
+          logApi('❌ Validation error: $errorData', isError: true);
+          throw Exception('Неверный статус заказа');
+        } catch (e) {
+          throw Exception('Ошибка валидации данных');
+        }
+      } else if (response.statusCode == 404) {
+        logApi('❌ Order not found', isError: true);
+        throw Exception('Заказ не найден');
+      } else {
+        logApi(
+          '❌ Failed to change order status: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception(
+          'Не удалось изменить статус заказа. Код ошибки: ${response.statusCode}',
+        );
+      }
+    } on TimeoutException catch (e) {
+      logApi('❌ Request timeout: $e', isError: true);
+      throw Exception('Превышено время ожидания');
+    } catch (e, stackTrace) {
+      logApi('❌ Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
+  // Добавьте этот метод в ваш ApiService
+  static Future<Map<String, dynamic>> getClientOrders() async {
+    final url = Uri.parse('$baseUrl/me/client/orders');
+
+    logApi('Getting client orders:');
+    logApi('  URL: $url');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          logApi('Client orders loaded successfully');
+          logApi('Orders count: ${responseData['data']?.length ?? 0}');
+          return responseData;
+        } catch (e) {
+          logApi('JSON parsing error: $e', isError: true);
+          throw Exception('Failed to parse client orders response: $e');
+        }
+      } else if (response.statusCode == 401) {
+        logApi('Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else {
+        logApi(
+          'Failed to load client orders, status: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception('Failed to load client orders: ${response.statusCode}');
+      }
+    } on TimeoutException catch (e) {
+      logApi('Request timeout: $e', isError: true);
+      throw Exception('Превышено время ожидания при загрузке заказов');
+    } catch (e, stackTrace) {
+      logApi('Unexpected error: $e', isError: true);
+      logApi('Stack trace: $stackTrace', isError: true);
+      rethrow;
+    }
+  }
+
+  // Создание заказа
+  static Future<Map<String, dynamic>> createOrder({
+    required int categoryId,
+    required int cityId,
+    required String title,
+    required String description,
+    required String addressStreet,
+    required String addressHouse,
+    required String addressApartment,
+    required String telephone,
+    required double price,
+    bool isActive = true,
+    String? clientTelephone,
+    required List<String> images,
+  }) async {
+    final url = Uri.parse('$baseUrl/orders');
+
+    logApi('Creating order:');
+    logApi('  URL: $url');
+    logApi('  Category ID: $categoryId');
+    logApi('  City ID: $cityId');
+    logApi('  Title: $title');
+    logApi('  Description length: ${description.length}');
+    logApi(
+      '  Address: $addressStreet, дом: $addressHouse, кв: $addressApartment',
+    );
+    logApi('  Telephone: $telephone');
+    logApi('  Price: $price');
+    logApi('  Images count: ${images.length}');
+
+    try {
+      final headers = await _getHeaders();
+      logApi('Request headers: $headers');
+
+      final body = <String, dynamic>{
+        'category_id': categoryId,
+        'city_id': cityId,
+        'title': title,
+        'description': description,
+        'is_active': isActive,
+        'address_street': addressStreet,
+        'address_house': addressHouse,
+        'address_apartment': addressApartment,
+        'telephone': telephone,
+        'price': price,
+        'images': images,
+      };
+
+      // Добавляем client_telephone, если он предоставлен
+      if (clientTelephone != null && clientTelephone.isNotEmpty) {
+        body['client_telephone'] = clientTelephone;
+      }
+
+      logApi('Request body: $body');
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
+
+      logApi('Response status: ${response.statusCode}');
+      logApi('Response body: ${response.body}');
+
+      // ИСПРАВЛЕНИЕ: Принимаем и 200, и 201 как успешные коды
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          final responseData = jsonDecode(response.body);
+          logApi('✅ Order created successfully');
+          logApi('Order data: $responseData');
+          return responseData;
+        } catch (e) {
+          logApi('❌ JSON parsing error: $e', isError: true);
+          throw Exception('Не удалось обработать ответ сервера');
+        }
+      } else if (response.statusCode == 401) {
+        logApi('❌ Unauthorized - clearing auth data', isError: true);
+        await AuthService.clearAuthData();
+        throw Exception('Сессия истекла. Пожалуйста, войдите снова.');
+      } else if (response.statusCode == 422) {
+        try {
+          final errorData = jsonDecode(response.body);
+          logApi('❌ Validation error: $errorData', isError: true);
+
+          String errorMessage = 'Ошибка валидации данных:';
+          final errors = errorData['errors'] ?? {};
+
+          errors.forEach((field, messages) {
+            if (messages is List) {
+              errorMessage += '\n• $field: ${messages.join(', ')}';
+            }
+          });
+
+          throw Exception(errorMessage);
+        } catch (e) {
+          logApi('❌ Error parsing validation response: $e', isError: true);
+          throw Exception('Ошибка валидации данных');
+        }
+      } else {
+        logApi(
+          '❌ Failed to create order: ${response.statusCode}',
+          isError: true,
+        );
+        throw Exception(
+          'Не удалось создать заказ. Код ошибки: ${response.statusCode}',
+        );
+      }
+    } on TimeoutException catch (e) {
+      logApi('❌ Request timeout: $e', isError: true);
+      throw Exception(
+        'Превышено время ожидания. Проверьте подключение к интернету.',
+      );
+    } on SocketException catch (e) {
+      logApi('❌ Network error: $e', isError: true);
+      throw Exception('Ошибка сети. Проверьте подключение к интернету.');
+    } catch (e, stackTrace) {
+      logApi('❌ Unexpected error: $e', isError: true);
       logApi('Stack trace: $stackTrace', isError: true);
       rethrow;
     }

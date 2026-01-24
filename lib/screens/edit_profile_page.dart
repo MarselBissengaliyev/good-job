@@ -310,7 +310,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   // Состояние данных
   bool _isLoading = true;
   bool _isSaving = false;
-  ProfileMode _profileMode = ProfileMode.client;
+  ProfileMode _currentProfileMode = ProfileMode.client; // Текущий режим из сервера
+  ProfileMode _selectedProfileMode = ProfileMode.client; // Выбранный режим в UI
   int? _selectedCityId;
   List<dynamic> _cities = [];
 
@@ -320,7 +321,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void initState() {
     super.initState();
-    _profileMode = widget.initialMode;
     _nameController = TextEditingController();
     _surnameController = TextEditingController();
     _patronymicController = TextEditingController();
@@ -355,11 +355,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _patronymicController.text = user['patronymic'] ?? '';
         _phoneController.text = user['telephone'] ?? '';
 
-        // Устанавливаем режим из профиля или из начального значения
+        // Устанавливаем текущий режим из профиля
         final activeMode = user['activeMode'] ?? 'client';
-        _profileMode = activeMode == 'master'
+        _currentProfileMode = activeMode == 'master'
             ? ProfileMode.master
             : ProfileMode.client;
+        
+        // Изначально выбранный режим совпадает с текущим
+        _selectedProfileMode = _currentProfileMode;
 
         _selectedCityId = user['city']['id'];
         _isLoading = false;
@@ -372,14 +375,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   // Проверка, изменились ли данные
   bool get _hasChanges {
-    return _nameController.text.isNotEmpty &&
+    final hasBasicChanges = _nameController.text.isNotEmpty &&
         _surnameController.text.isNotEmpty &&
         _selectedCityId != null;
+    
+    // Проверяем, изменился ли режим профиля
+    final hasModeChanged = _selectedProfileMode != _currentProfileMode;
+    
+    return hasBasicChanges || hasModeChanged;
   }
+
+  // Проверка, изменился ли режим профиля
+  bool get _isProfileModeChanged => _selectedProfileMode != _currentProfileMode;
 
   // Обновление профиля
   Future<void> _updateProfile() async {
-    if (!_hasChanges) {
+    if (_nameController.text.isEmpty || _surnameController.text.isEmpty || _selectedCityId == null) {
       _showErrorSnackBar('Заполните обязательные поля');
       return;
     }
@@ -394,8 +405,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ? null
             : _patronymicController.text.trim(),
         cityId: _selectedCityId!,
-        activeMode: _profileMode == ProfileMode.master ? 'master' : 'client',
+        activeMode: _selectedProfileMode == ProfileMode.master ? 'master' : 'client',
       );
+
+      // Обновляем текущий режим после успешного сохранения
+      _currentProfileMode = _selectedProfileMode;
 
       // Если телефон изменился, показываем модальное окно для подтверждения
       final currentPhone = _phoneController.text.trim();
@@ -404,13 +418,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
         await _showVerificationModal();
       } else {
         _showSuccessSnackBar('Профиль успешно обновлен');
-        Navigator.pop(context);
+        _navigateBackWithResult();
       }
     } catch (e) {
       _showErrorSnackBar('Ошибка обновления профиля');
     } finally {
       setState(() => _isSaving = false);
     }
+  }
+
+  // Возврат на предыдущую страницу с результатом
+  void _navigateBackWithResult() {
+    Navigator.pop(context, {
+      'profileUpdated': true,
+      'newMode': _currentProfileMode,
+    });
   }
 
   // Проверка, изменился ли телефон
@@ -512,7 +534,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       });
 
       // Возвращаемся на предыдущую страницу
-      Navigator.pop(context);
+      _navigateBackWithResult();
     } catch (e) {
       // Если серверная ошибка 500 или 422, считаем успешным (проблема на бэкенде)
       if (e.toString().contains('500') ||
@@ -526,7 +548,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         });
 
         // Возвращаемся на предыдущую страницу
-        Navigator.pop(context);
+        _navigateBackWithResult();
       } else {
         _showErrorSnackBar('Неверный код подтверждения');
         // Показываем модальное окно снова
@@ -587,6 +609,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
       return _buildLoadingScreen();
     }
 
+    // Определяем, какой режим отображать в UI
+    final displayMode = _selectedProfileMode;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -618,7 +643,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
         ),
         actions: [
-          if (_profileMode == ProfileMode.master)
+          if (displayMode == ProfileMode.master)
             IconButton(
               onPressed: () {},
               icon: Image.asset('assets/logout.png', width: 22, height: 22),
@@ -661,8 +686,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Выбор города
-                if (_profileMode == ProfileMode.client) ...[
+                // Выбор города (только для клиентов в текущем режиме)
+                if (displayMode == ProfileMode.client) ...[
                   _buildCityDropdown(),
                   const SizedBox(height: 32),
                 ],
@@ -674,8 +699,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 _buildPhoneField(),
                 const SizedBox(height: 12),
 
-                // Социальные сети (только для мастера)
-                if (_profileMode == ProfileMode.master) ...[
+                // Социальные сети (только для мастера в текущем режиме)
+                if (displayMode == ProfileMode.master) ...[
                   _buildInputField(
                     'Instagram',
                     _username1Controller,
@@ -694,8 +719,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 _buildSaveButton(),
                 const SizedBox(height: 12),
 
-                // Кнопка "Мои работы" (только для мастера)
-                if (_profileMode == ProfileMode.master) _buildPortfolioButton(),
+                // Кнопка "Мои работы" (только для мастера в текущем режиме)
+                if (displayMode == ProfileMode.master) _buildPortfolioButton(),
 
                 const SizedBox(height: 32),
               ],
@@ -715,8 +740,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ],
       ),
       bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.account, // Указываем активную вкладку
-        accountType: _profileMode == ProfileMode.master
+        activeItem: NavItem.account,
+        accountType: _currentProfileMode == ProfileMode.master
             ? AccountType.master
             : AccountType.client,
       ),
@@ -813,7 +838,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
             ),
           ),
-          if (_profileMode == ProfileMode.master)
+          if (_selectedProfileMode == ProfileMode.master)
             Positioned(
               top: 0,
               right: 0,
@@ -861,7 +886,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _buildModeButton(String label, ProfileMode mode) {
-    bool isActive = _profileMode == mode;
+    bool isActive = _selectedProfileMode == mode;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
@@ -883,7 +908,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => _profileMode = mode),
+          onTap: () => setState(() => _selectedProfileMode = mode),
           child: Center(
             child: Text(
               label,
@@ -1136,53 +1161,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildMasterBottomNav() {
-    return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(54),
-        topRight: Radius.circular(54),
-      ),
-      child: Container(
-        height: 70,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildBottomNavItem('Работа', 'assets/work.png', false),
-            _buildBottomNavItem('Прайс', 'assets/price.png', false),
-            _buildBottomNavItem('Аккаунт', 'assets/account.png', true),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavItem(String label, String icon, bool isActive) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Image.asset(
-          icon,
-          width: 24,
-          height: 24,
-          color: isActive ? const Color(0xFF0F7EDE) : const Color(0xFF5F6368),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            color: isActive ? const Color(0xFF0F7EDE) : const Color(0xFF5F6368),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-      ],
     );
   }
 }

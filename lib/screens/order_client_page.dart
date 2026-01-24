@@ -2,56 +2,189 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/screens/interested_in_order_page.dart';
+import 'package:flutter_application_1/services/api_service.dart';
 
-import 'edit_portfolio_master_page.dart';
 
 class OrderClientPage extends StatefulWidget {
-  final Map<String, dynamic> order;
+  final String orderId; // Теперь принимаем ID заказа
 
-  const OrderClientPage({super.key, required this.order});
+  const OrderClientPage({super.key, required this.orderId});
 
   @override
   State<OrderClientPage> createState() => _OrderClientPageState();
 }
 
 class _OrderClientPageState extends State<OrderClientPage> {
-  // Пример данных для просмотров
-  final List<Map<String, dynamic>> _viewers = [
-    {
-      'name': 'Константин Константинов',
-      'specialty': 'Плиточные работы, отделочные работы',
-      'avatar': 'assets/avatar.png',
-      'id': '1',
-      'rating': 4.8,
-      'reviews': 24,
-    },
-    {
-      'name': 'Алексей Мастеров',
-      'specialty': 'Сантехнические работы',
-      'avatar': 'assets/avatar.png',
-      'id': '2',
-      'rating': 4.5,
-      'reviews': 18,
-    },
-  ];
+  Map<String, dynamic>? _order;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrderData();
+  }
+
+  Future<void> _loadOrderData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Загружаем данные заказа
+      final orderResponse = await ApiService.getOrderById(widget.orderId);
+      setState(() {
+        _order = orderResponse['data'];
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _loadOrderData();
+  }
 
   // Метод для перехода на страницу interested_in_page
   void _openInterestedInPage(Map<String, dynamic> viewer) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => InterestedInOrderPage(
-          viewer: viewer,
-          order: widget.order,
+    if (_order != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InterestedInOrderPage(
+            viewer: viewer,
+            order: _order!,
+          ),
         ),
+      );
+    }
+  }
+
+  // Метод для отзыва заказа
+  Future<void> _withdrawOrder() async {
+    if (_order == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Отозвать заказ'),
+        content: const Text('Вы уверены, что хотите отозвать этот заказ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Отозвать', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.changeOrderStatus(
+          orderId: widget.orderId,
+          status: 'canceled',
+        );
+        
+        // Обновляем локальные данные
+        setState(() {
+          _order?['status'] = 'Отозван';
+          _order?['isActive'] = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Заказ успешно отозван')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  // Метод для редактирования заказа
+  void _editOrder() {
+    // TODO: Реализовать переход на страницу редактирования заказа
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Редактирование заказа (в разработке)')),
+    );
+  }
+
+  // Метод для архивирования заказа
+  Future<void> _archiveOrder() async {
+    try {
+      await ApiService.changeOrderStatus(
+        orderId: widget.orderId,
+        status: 'archived',
+      );
+      
+      setState(() {
+        _order?['status'] = 'Архивирован';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заказ перемещен в архив')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
+  // Метод для удаления заказа
+  Future<void> _deleteOrder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить заказ'),
+        content: const Text('Вы уверены, что хотите удалить этот заказ? Это действие нельзя отменить.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteOrder(int.parse(widget.orderId));
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Заказ успешно удален')),
+        );
+        
+        // Возвращаемся на предыдущую страницу
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final order = widget.order; // Получаем данные заказа
-
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
@@ -77,14 +210,65 @@ class _OrderClientPageState extends State<OrderClientPage> {
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              // Можно добавить логику для истории
-            },
-            icon: Image.asset('assets/history.png', width: 22, height: 22),
+            onPressed: _refreshData,
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _buildBody(),
+      bottomNavigationBar: CustomBottomNavBar(
+        activeItem: NavItem.work,
+        accountType: AccountType.client,
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Ошибка загрузки',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.red[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _refreshData,
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_order == null) {
+      return const Center(
+        child: Text('Заказ не найден'),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,24 +291,42 @@ class _OrderClientPageState extends State<OrderClientPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Изображение заказа
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        image: const DecorationImage(
-                          image: AssetImage('assets/work_sample.png'),
-                          fit: BoxFit.cover,
+                    // Изображения заказа (если есть в API)
+                    if (_order?['images'] != null && (_order?['images'] as List).isNotEmpty)
+                      Column(
+                        children: [
+                          Container(
+                            height: 200,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              image: DecorationImage(
+                                image: NetworkImage(
+                                  'http://gj-back.checkedout.kz${_order?['images'][0]}',
+                                ),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      )
+                    else
+                      Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.image, size: 50, color: Colors.grey),
                         ),
                       ),
-                    ),
-
-                    const SizedBox(height: 24),
 
                     // Заголовок
                     Text(
-                      order['title'] ?? 'Укладка плитки в ванной комнате',
+                      _order?['title'] ?? 'Нет названия',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -141,7 +343,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
                         // Описание слева
                         Expanded(
                           child: Text(
-                            order['description'] ?? 'Плиточные работы',
+                            _order?['description'] ?? 'Нет описания',
                             style: const TextStyle(
                               fontSize: 14,
                               color: Color(0xFF5F6368),
@@ -151,31 +353,29 @@ class _OrderClientPageState extends State<OrderClientPage> {
                         ),
 
                         // Цена справа
-                        Text(
-                          order['price'] ?? '50 000 тг',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F7EDE),
-                            fontFamily: 'Plus Jakarta Sans',
+                        if (_order?['price'] != null)
+                          Text(
+                            '${_order?['price']} ₸',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F7EDE),
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
                           ),
-                        ),
                       ],
                     ),
 
                     const SizedBox(height: 16),
 
-                    // Подробное описание работы
-                    Text(
-                      order['fullDescription'] ??
-                          'Нужно уложить плитку в ванной комнате. Площадь — примерно 5–6 м². Требуется снять старую плитку, подготовить стены и пол, выровнять поверхность и аккуратно уложить новую плитку (настенную и напольную). Хочу, чтобы швы были ровные, без сколов и перепадов. Также нужна затирка и герметизация мест вокруг ванны и раковины. Материал уже куплен, нужен аккуратный и опытный мастер.',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
-                        height: 1.5,
-                      ),
-                    ),
+                    // Дополнительная информация
+                    if (_order?['address_street'] != null)
+                      _buildInfoRow('Адрес:', '${_order?['address_street']}, '
+                          'д. ${_order?['address_house']}, '
+                          'кв. ${_order?['address_apartment']}'),
+
+                    if (_order?['telephone'] != null)
+                      _buildInfoRow('Телефон:', _order?['telephone']),
 
                     const SizedBox(height: 24),
 
@@ -189,26 +389,26 @@ class _OrderClientPageState extends State<OrderClientPage> {
                       ),
                       child: Row(
                         children: [
-                          // Статус "Активен"
+                          // Статус
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
+                              color: _getStatusColor(_order?['status']),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: const Color(0xFF1DCE6A),
+                                color: _getStatusBorderColor(_order?['status']),
                                 width: 1,
                               ),
                             ),
                             child: Text(
-                              order['status'] ?? 'Активен',
-                              style: const TextStyle(
+                              _getStatusText(_order?['status']),
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                                color: Color(0xFF1DCE6A),
+                                color: _getStatusTextColor(_order?['status']),
                                 fontFamily: 'Plus Jakarta Sans',
                               ),
                             ),
@@ -216,12 +416,10 @@ class _OrderClientPageState extends State<OrderClientPage> {
 
                           const Spacer(),
 
-                          // Кнопка "Отозвать"
-                          if (order['isActive'] == true)
+                          // Кнопка "Отозвать" для активных заказов
+                          if (_order?['status'] == 'active')
                             OutlinedButton(
-                              onPressed: () {
-                                // Логика отзыва публикации
-                              },
+                              onPressed: _withdrawOrder,
                               style: OutlinedButton.styleFrom(
                                 backgroundColor: Colors.white,
                                 foregroundColor: const Color(0xFF5F6368),
@@ -252,7 +450,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
                           // Кнопка меню
                           GestureDetector(
                             onTap: () {
-                              _showOrderOptionsModal(context, order);
+                              _showOrderOptionsModal(context);
                             },
                             child: Container(
                               width: 36,
@@ -283,129 +481,45 @@ class _OrderClientPageState extends State<OrderClientPage> {
               ),
             ),
 
-            const SizedBox(height: 34), // Отступ 34 пикселя
-            // Секция "Просмотрено"
-            const Text(
-              'Просмотрено',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF41454A),
-                fontFamily: 'Plus Jakarta Sans',
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Список просмотров
-            Column(
-              children: List.generate(_viewers.length, (index) {
-                final viewer = _viewers[index];
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: index < _viewers.length - 1 ? 8 : 0,
-                  ),
-                  child: GestureDetector(
-                    onTap: () {
-                      _openInterestedInPage(viewer);
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            // Аватарка
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEBC696),
-                                borderRadius: BorderRadius.circular(21),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(21),
-                                child: Image.asset(
-                                  viewer['avatar'],
-                                  width: 42,
-                                  height: 42,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 14),
-
-                            // Информация о просмотревшем
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Имя
-                                  Text(
-                                    viewer['name'],
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF41454A),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 2),
-
-                                  // Специальность
-                                  Text(
-                                    viewer['specialty'],
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w300,
-                                      color: Color(0xFF5F6368),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-
             const SizedBox(height: 32),
           ],
         ),
       ),
+    );
+  }
 
-      // Bottom Navigation Bar
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.work, // Указываем активную вкладку
-        accountType: AccountType.client,
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF5F6368),
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  void _showOrderOptionsModal(
-    BuildContext context,
-    Map<String, dynamic> order,
-  ) {
+  void _showOrderOptionsModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -447,9 +561,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
                     ),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
+                      onTap: () => Navigator.pop(context),
                       child: Container(
                         width: 32,
                         height: 32,
@@ -479,27 +591,37 @@ class _OrderClientPageState extends State<OrderClientPage> {
                 ),
                 child: Column(
                   children: [
-                    // Редактировать
-                    _buildOptionButton(
-                      icon: 'assets/edit.png',
-                      text: 'Редактировать',
-                      onTap: () {
-                        Navigator.pop(context);
-                        // _editOrder(order);
-                      },
-                    ),
-                    const SizedBox(height: 8),
+                    // Редактировать (только для активных заказов)
+                    if (_order?['status'] == 'active')
+                      Column(
+                        children: [
+                          _buildOptionButton(
+                            icon: 'assets/edit.png',
+                            text: 'Редактировать',
+                            onTap: () {
+                              Navigator.pop(context);
+                              _editOrder();
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
 
-                    // Отозвать публикацию
-                    _buildOptionButton(
-                      icon: 'assets/chat_error.png',
-                      text: 'Отозвать публикацию',
-                      onTap: () {
-                        Navigator.pop(context);
-                        // _unpublishOrder(order);
-                      },
-                    ),
-                    const SizedBox(height: 8),
+                    // Отозвать публикацию (только для активных заказов)
+                    if (_order?['status'] == 'active')
+                      Column(
+                        children: [
+                          _buildOptionButton(
+                            icon: 'assets/chat_error.png',
+                            text: 'Отозвать публикацию',
+                            onTap: () {
+                              Navigator.pop(context);
+                              _withdrawOrder();
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
 
                     // Архивировать
                     _buildOptionButton(
@@ -507,7 +629,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
                       text: 'Архивировать',
                       onTap: () {
                         Navigator.pop(context);
-                        // _archiveOrder(order);
+                        _archiveOrder();
                       },
                     ),
                     const SizedBox(height: 8),
@@ -518,7 +640,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
                       text: 'Удалить',
                       onTap: () {
                         Navigator.pop(context);
-                        // _deleteOrder(order);
+                        _deleteOrder();
                       },
                       isDelete: true,
                     ),
@@ -575,5 +697,66 @@ class _OrderClientPageState extends State<OrderClientPage> {
         ),
       ),
     );
+  }
+
+  // Вспомогательные методы для статусов
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case 'active':
+        return const Color(0xFFE8F5E9);
+      case 'completed':
+        return const Color(0xFFE3F2FD);
+      case 'canceled':
+        return const Color(0xFFFFEBEE);
+      case 'archived':
+        return const Color(0xFFF5F5F5);
+      default:
+        return const Color(0xFFF5F5F5);
+    }
+  }
+
+  Color _getStatusBorderColor(String? status) {
+    switch (status) {
+      case 'active':
+        return const Color(0xFF1DCE6A);
+      case 'completed':
+        return const Color(0xFF2196F3);
+      case 'canceled':
+        return const Color(0xFFF44336);
+      case 'archived':
+        return const Color(0xFF9E9E9E);
+      default:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
+  Color _getStatusTextColor(String? status) {
+    switch (status) {
+      case 'active':
+        return const Color(0xFF1DCE6A);
+      case 'completed':
+        return const Color(0xFF2196F3);
+      case 'canceled':
+        return const Color(0xFFF44336);
+      case 'archived':
+        return const Color(0xFF757575);
+      default:
+        return const Color(0xFF757575);
+    }
+  }
+
+  String _getStatusText(String? status) {
+    switch (status) {
+      case 'active':
+        return 'Активен';
+      case 'completed':
+        return 'Завершен';
+      case 'canceled':
+        return 'Отменен';
+      case 'archived':
+        return 'Архивирован';
+      default:
+        return status ?? 'Неизвестно';
+    }
   }
 }
