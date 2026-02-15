@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'auth_service.dart';
+import 'auth/auth_service.dart';
 
 class HttpClient {
   static Future<http.Response> post(

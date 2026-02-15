@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'role_provider.dart';
 import 'services/api_service.dart';
-import 'services/auth_service.dart';
+import 'services/auth/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

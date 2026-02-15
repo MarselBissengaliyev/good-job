@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
+import 'package:flutter_application_1/services/auth/auth_service.dart';
 
 class InterestedInOrderPage extends StatelessWidget {
   final Map<String, dynamic> viewer;
@@ -54,8 +55,8 @@ class InterestedInOrderPage extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              // Логика выхода или других действий
+           onPressed: () async {
+              await AuthService.clearAuthData();
             },
             icon: Image.asset('assets/logout.png', width: 22, height: 22),
           ),

@@ -5,8 +5,9 @@ import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/models/work-photo.dart';
 import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
 import 'package:flutter_application_1/screens/edit_profile_page.dart';
+import 'package:flutter_application_1/screens/help_page.dart';
 import '../services/api_service.dart';
-import '../services/auth_service.dart';
+import '../services/auth/auth_service.dart';
 import 'my_orders_client_page.dart';
 
 enum AccountType { client, master }
@@ -305,10 +306,9 @@ class _AccountPageState extends State<AccountPage> {
                 icon: 'assets/help.png',
                 title: 'Помощь',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Раздел "Помощь" в разработке'),
-                    ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HelpPage()),
                   );
                 },
               ),
@@ -391,6 +391,11 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Widget _buildAvatar({required bool isMaster}) {
+    // Получаем URL аватара из userData
+    String? avatarUrl = userData?['avatar'];
+
+    String displayLetter = '?';
+
     return Stack(
       children: [
         Container(
@@ -400,11 +405,39 @@ class _AccountPageState extends State<AccountPage> {
             shape: BoxShape.circle,
             color: const Color(0xFF96C5EB),
             border: Border.all(color: const Color(0xFF0F7EDE), width: 2),
-            image: const DecorationImage(
-              image: AssetImage('assets/avatar.png'),
-              fit: BoxFit.cover,
-            ),
           ),
+          child: avatarUrl != null && avatarUrl.isNotEmpty
+              ? ClipOval(
+                  child: Image.network(
+                    'http://gj-back.checkedout.kz/storage/$avatarUrl',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      // При ошибке загрузки показываем букву
+                      return Center(
+                        child: Text(
+                          displayLetter,
+                          style: const TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    displayLetter,
+                    style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                      fontFamily: 'Plus Jakarta Sans',
+                    ),
+                  ),
+                ),
         ),
         Positioned(
           bottom: 0,
@@ -482,31 +515,6 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Поле поиска (опционально)
-                  Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Поиск категорий...',
-                        hintStyle: const TextStyle(color: Color(0xFF9AA0A6)),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: Color(0xFF9AA0A6),
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
                   // Список категорий
                   Expanded(
                     child: isLoadingCategories
@@ -1004,7 +1012,26 @@ class _AccountPageState extends State<AccountPage> {
             padding: const EdgeInsets.all(13),
             child: Row(
               children: [
-                Image.asset(icon, width: 24, height: 24),
+                // Для иконки help используем Icons.help_outline
+                if (icon == 'assets/help.png')
+                  const Icon(
+                    Icons.help_outline,
+                    color: Color(0xFF41454A),
+                    size: 24,
+                  )
+                else
+                  Image.asset(
+                    icon,
+                    width: 24,
+                    height: 24,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.help_outline,
+                        color: Color(0xFF41454A),
+                        size: 24,
+                      );
+                    },
+                  ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(

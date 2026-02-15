@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
-import '../services/auth_service.dart';
+import '../services/auth/auth_service.dart';
 
 class Registration4Page extends StatefulWidget {
   final String phoneNumber;
@@ -43,11 +43,10 @@ class _Registration4PageState extends State<Registration4Page> {
   }
 
   Future<void> _fetchDebugInfo() async {
-    final data = await ApiService.getDebugSmsData(widget.phoneNumber);
+    final data = await ApiService.getDebugSmsCode(widget.phoneNumber);
     if (data != null && mounted) {
       setState(() {
-        _expectedCode = data['code'].toString();
-        _serverPayload = data['payload'];
+        _expectedCode = data;
       });
       print('[DEBUG] Получен код для проверки: $_expectedCode');
       print('[DEBUG] Payload: $_serverPayload');

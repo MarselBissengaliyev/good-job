@@ -5,6 +5,7 @@ import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/models/work-photo.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/services/api_service.dart';
+import 'package:flutter_application_1/services/auth/auth_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'orders_master_page.dart';
 
@@ -78,7 +79,11 @@ class _EditPortfolioMasterPageState extends State<EditPortfolioMasterPage> {
         ),
         actions: [
           IconButton(
-            onPressed: () {},
+           onPressed: () async {
+              await AuthService.clearAuthData();
+              if (mounted)
+                Navigator.pushReplacementNamed(context, '/registration');
+            },
             icon: Image.asset('assets/logout.png', width: 22, height: 22),
           ),
         ],
@@ -483,6 +488,8 @@ class _EditPortfolioMasterPageState extends State<EditPortfolioMasterPage> {
           child: CircularProgressIndicator(color: Color(0xFF0F7EDE)),
         ),
       );
+
+      await ApiService.uploadWorkPhoto(imageFile);
 
       Navigator.pop(context); // Закрываем индикатор загрузки
 

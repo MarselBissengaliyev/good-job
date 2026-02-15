@@ -338,7 +338,7 @@ class _Registration3PageState extends State<Registration3Page> {
         lastname: lastname,
         telephone: phoneNumber,
         cityId: selectedCityId!,
-        activeMode: roleProvider.selectedRole == 'Мастер' ? 'master' : 'client',
+        activeMode: roleProvider.selectedRole == UserRole.master ? 'master' : 'client',
       );
 
       int ttl = 60;

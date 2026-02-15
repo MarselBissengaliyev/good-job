@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/services/api_service.dart';
@@ -17,6 +18,8 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
+  String _searchQuery = '';
+  String _filterStatus = 'all'; // 'all', 'active', 'inactive'
 
   @override
   void initState() {
@@ -76,6 +79,124 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
     return isActive == true;
   }
 
+  List<dynamic> get _filteredOrders {
+    return _orders.where((order) {
+      final title = order['title']?.toString().toLowerCase() ?? '';
+      final description = order['description']?.toString().toLowerCase() ?? '';
+      final matchesSearch =
+          _searchQuery.isEmpty ||
+          title.contains(_searchQuery.toLowerCase()) ||
+          description.contains(_searchQuery.toLowerCase());
+
+      final isActive = _isOrderActive(order);
+      final matchesFilter =
+          _filterStatus == 'all' ||
+          (_filterStatus == 'active' && isActive) ||
+          (_filterStatus == 'inactive' && !isActive);
+
+      return matchesSearch && matchesFilter;
+    }).toList();
+  }
+
+  void _showCustomSnackBar({required String message, required bool isSuccess}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess
+            ? const Color(0xFF4CAF50)
+            : const Color(0xFFF44336),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
+  }
+
+  void _showFilterMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0E0E0),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Фильтр заказов',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF41454A),
+                  ),
+                ),
+              ),
+              _buildFilterOption('Все заказы', 'all'),
+              _buildFilterOption('Активные', 'active'),
+              _buildFilterOption('Неактивные', 'inactive'),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterOption(String label, String value) {
+    return ListTile(
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
+      ),
+      trailing: _filterStatus == value
+          ? const Icon(Icons.check_circle, color: Color(0xFF0F7EDE))
+          : null,
+      onTap: () {
+        setState(() {
+          _filterStatus = value;
+        });
+        Navigator.pop(context);
+      },
+    );
+  }
+
   Widget _buildOrderItem(dynamic order) {
     final orderId = order['id']?.toString() ?? '0';
     final title = order['title']?.toString() ?? 'Без названия';
@@ -95,12 +216,13 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: -2,
           ),
         ],
       ),
@@ -109,85 +231,144 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
           GestureDetector(
             onTap: () => _openOrderDetails(order),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: const Color(0xFFF5F5F5),
-                      image: firstImage != null
-                          ? DecorationImage(
-                              image: NetworkImage(_getFullImageUrl(firstImage)),
-                              fit: BoxFit.cover,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        image: firstImage != null
+                            ? DecorationImage(
+                                image: NetworkImage(
+                                  _getFullImageUrl(firstImage),
+                                ),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: firstImage == null
+                          ? Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    const Color(0xFFF5F5F5),
+                                    const Color(0xFFEEEEEE),
+                                  ],
+                                ),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.image_outlined,
+                                  color: Color(0xFFBDBDBD),
+                                  size: 36,
+                                ),
+                              ),
                             )
                           : null,
                     ),
-                    child: firstImage == null
-                        ? const Center(
-                            child: Icon(
-                              Icons.image_outlined,
-                              color: Color(0xFF9E9E9E),
-                              size: 32,
-                            ),
-                          )
-                        : null,
                   ),
-
-                  const SizedBox(width: 12),
-
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF41454A),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF41454A),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  height: 1.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isActive
+                                    ? const Color(0xFF4CAF50)
+                                    : const Color(0xFF9E9E9E),
+                              ),
+                            ),
+                          ],
                         ),
-
-                        const SizedBox(height: 4),
-
-                        if (clientName.isNotEmpty)
-                          Text(
-                            clientName,
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            formattedPrice,
                             style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF5F6368),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F7EDE),
                               fontFamily: 'Plus Jakarta Sans',
                             ),
                           ),
-
-                        const SizedBox(height: 8),
-
-                        Text(
-                          formattedPrice,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F7EDE),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
                         ),
-
-                        const SizedBox(height: 4),
-
-                        Text(
-                          date,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF9E9E9E),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 12,
+                              color: const Color(0xFF9E9E9E),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              date,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF9E9E9E),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            if (clientName.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                width: 3,
+                                height: 3,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFFBDBDBD),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  clientName,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9E9E9E),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -196,90 +377,118 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
               ),
             ),
           ),
-
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: const BoxDecoration(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(color: Color(0xFFEEEEEE), width: 1),
+                top: BorderSide(
+                  color: const Color(0xFFEEEEEE).withOpacity(0.7),
+                  width: 1,
+                ),
               ),
             ),
             child: Row(
               children: [
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                    horizontal: 10,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? const Color(0xFFE8F5E9)
-                        : const Color(0xFFF5F5F5),
-                    borderRadius: BorderRadius.circular(6),
+                        ? const Color(0xFF4CAF50).withOpacity(0.1)
+                        : const Color(0xFF9E9E9E).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    isActive ? 'Активен' : 'Не активен',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isActive
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFF9E9E9E),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isActive
+                            ? Icons.check_circle
+                            : Icons.remove_circle_outline,
+                        size: 14,
+                        color: isActive
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFF9E9E9E),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isActive ? 'Активен' : 'Не активен',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isActive
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFF9E9E9E),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-
                 const Spacer(),
-
                 if (!isActive)
-                  OutlinedButton(
-                    onPressed: () => _publishOrder(orderId),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF5F6368),
-                      side: const BorderSide(
-                        color: Color(0xFF5F6368),
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                    ),
-                    child: const Text(
-                      'Опубликовать',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'Plus Jakarta Sans',
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _publishOrder(orderId),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.publish_rounded,
+                              size: 16,
+                              color: Color(0xFF4CAF50),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Опубликовать',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF4CAF50),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-
                 const SizedBox(width: 8),
-
-                GestureDetector(
-                  onTap: () => _showOrderOptionsModal(context, order),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFFEEEEEE),
-                        width: 1,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _showOrderOptionsModal(context, order),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFFEEEEEE),
+                          width: 1,
+                        ),
                       ),
-                    ),
-                    child: Center(
-                      child: Image.asset(
-                        'assets/more.png',
-                        width: 20,
-                        height: 20,
-                        color: const Color(0xFF5F6368),
+                      child: const Center(
+                        child: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 20,
+                          color: Color(0xFF5F6368),
+                        ),
                       ),
                     ),
                   ),
@@ -295,9 +504,10 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   void _openOrderDetails(dynamic order) {
     final orderId = order['id']?.toString();
     if (orderId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Не удалось открыть заказ')));
+      _showCustomSnackBar(
+        message: 'Не удалось открыть заказ',
+        isSuccess: false,
+      );
       return;
     }
 
@@ -307,7 +517,6 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
         builder: (context) => OrderClientPage(orderId: orderId),
       ),
     ).then((value) {
-      // Обновляем заказы если вернулись с каким-то результатом
       if (value == true || value == 'updated' || value == 'deleted') {
         _loadOrders();
       }
@@ -315,6 +524,7 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   }
 
   void _addNewOrder() {
+    HapticFeedback.lightImpact();
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => AddOrderClientPage()),
@@ -324,40 +534,32 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   }
 
   Future<void> _publishOrder(String orderId) async {
+    HapticFeedback.mediumImpact();
+
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Публикация заказа...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showCustomSnackBar(message: 'Публикация заказа...', isSuccess: true);
 
       await ApiService.changeOrderStatus(orderId: orderId, status: 'active');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Заказ опубликован'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
+      HapticFeedback.heavyImpact();
+      _showCustomSnackBar(
+        message: 'Заказ успешно опубликован',
+        isSuccess: true,
       );
 
       _loadOrders();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+      HapticFeedback.vibrate();
+      _showCustomSnackBar(
+        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
       );
     }
   }
 
   void _showOrderOptionsModal(BuildContext context, dynamic order) {
     final orderId = order['id']?.toString() ?? '0';
+    final title = order['title']?.toString() ?? 'Без названия';
     final isActive = _isOrderActive(order);
 
     showModalBottomSheet(
@@ -366,173 +568,383 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
       isScrollControlled: true,
       builder: (context) {
         return Container(
-          margin: const EdgeInsets.only(bottom: 80),
-          decoration: const BoxDecoration(
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(16),
-              topRight: Radius.circular(16),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 20,
-                ),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFFEEEEEE), width: 1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'Заказ #$orderId',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF41454A),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF5F5F5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Image.asset(
-                            'assets/close.png',
-                            width: 16,
-                            height: 16,
-                            color: const Color(0xFF5F6368),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Column(
-                  children: [
-                    _buildOptionButton(
-                      icon: 'assets/edit.png',
-                      text: 'Редактировать',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _editOrder(order);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-
-                    if (isActive)
-                      _buildOptionButton(
-                        icon: 'assets/chat_error.png',
-                        text: 'Отозвать публикацию',
-                        onTap: () {
-                          Navigator.pop(context);
-                          _unpublishOrder(orderId);
-                        },
-                      )
-                    else
-                      _buildOptionButton(
-                        icon: Icons.publish,
-                        text: 'Опубликовать',
-                        onTap: () {
-                          Navigator.pop(context);
-                          _publishOrder(orderId);
-                        },
-                      ),
-                    const SizedBox(height: 8),
-
-                    _buildOptionButton(
-                      icon: 'assets/archive.png',
-                      text: 'Архивировать',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _archiveOrder(orderId);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-
-                    // НОВАЯ КНОПКА: Удалить
-                    _buildOptionButton(
-                      icon: 'assets/delete.png',
-                      text: 'Удалить',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _deleteOrder(orderId);
-                      },
-                      isDelete: true,
-                    ),
-                  ],
-                ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 30,
+                spreadRadius: -5,
+                offset: const Offset(0, -10),
               ),
             ],
+          ),
+          child: SafeArea(
+            top: false,
+            bottom: true,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 30,
+                    spreadRadius: -5,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Индикатор прокрутки с отступами
+                  Container(
+                    width: 40,
+                    height: 5,
+                    margin: const EdgeInsets.only(top: 16, bottom: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0E0E0),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+
+                  // Заголовок с правильными отступами
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Управление заказом',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1D1F),
+                                fontFamily: 'Plus Jakarta Sans',
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Выберите действие',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: const Color(0xFF9E9E9E),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 22,
+                              color: const Color(0xFF5F6368),
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Статус заказа с отступами
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? const Color(0xFF4CAF50).withOpacity(0.08)
+                            : const Color(0xFF9E9E9E).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isActive
+                              ? const Color(0xFF4CAF50).withOpacity(0.2)
+                              : const Color(0xFF9E9E9E).withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isActive
+                                  ? Icons.check_circle
+                                  : Icons.remove_circle_outline,
+                              size: 18,
+                              color: isActive
+                                  ? const Color(0xFF4CAF50)
+                                  : const Color(0xFF9E9E9E),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Статус заказа',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: const Color(0xFF9E9E9E),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isActive ? 'Активен' : 'Не активен',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: isActive
+                                        ? const Color(0xFF4CAF50)
+                                        : const Color(0xFF9E9E9E),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? const Color(0xFF4CAF50).withOpacity(0.1)
+                                  : const Color(0xFF9E9E9E).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              isActive ? 'Активный' : 'Неактивный',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isActive
+                                    ? const Color(0xFF4CAF50)
+                                    : const Color(0xFF9E9E9E),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Опции действий с правильными отступами
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        _buildCardOption(
+                          icon: Icons.edit_note_rounded,
+                          label: 'Редактировать',
+                          description: 'Изменить детали заказа',
+                          color: const Color(0xFF2196F3),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _editOrder(order);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCardOption(
+                          icon: isActive
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                          label: isActive ? 'Скрыть' : 'Опубликовать',
+                          description: isActive
+                              ? 'Сделать невидимым для мастеров'
+                              : 'Сделать видимым для мастеров',
+                          color: isActive
+                              ? const Color(0xFFFF9800)
+                              : const Color(0xFF4CAF50),
+                          onTap: () {
+                            Navigator.pop(context);
+                            if (isActive) {
+                              _unpublishOrder(orderId);
+                            } else {
+                              _publishOrder(orderId);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCardOption(
+                          icon: Icons.archive_rounded,
+                          label: 'В архив',
+                          description: 'Переместить в архивные заказы',
+                          color: const Color(0xFF795548),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _archiveOrder(orderId);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCardOption(
+                          icon: Icons.delete_forever_rounded,
+                          label: 'Удалить',
+                          description: 'Удалить заказ навсегда',
+                          color: const Color(0xFFF44336),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _deleteOrder(orderId);
+                          },
+                          isDestructive: true,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Кнопка закрытия с отступами
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF5F6368),
+                        side: BorderSide(
+                          color: const Color(0xFFE0E0E0),
+                          width: 1.5,
+                        ),
+                        minimumSize: const Size(double.infinity, 56),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text(
+                        'Закрыть',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Дополнительный отступ для безопасной зоны на iPhone
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildOptionButton({
-    required dynamic icon,
-    required String text,
+  Widget _buildCardOption({
+    required IconData icon,
+    required String label,
+    required String description,
+    required Color color,
     required VoidCallback onTap,
-    bool isDelete = false,
+    bool isDestructive = false,
   }) {
-    final iconWidget = icon is IconData
-        ? Icon(
-            icon,
-            size: 24,
-            color: isDelete ? const Color(0xFFF44336) : const Color(0xFF41454A),
-          )
-        : Image.asset(
-            icon as String,
-            width: 24,
-            height: 24,
-            color: isDelete ? const Color(0xFFF44336) : const Color(0xFF41454A),
-          );
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFEEEEEE), width: 1),
-        ),
-        child: Row(
-          children: [
-            iconWidget,
-            const SizedBox(width: 12),
-            Text(
-              text,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w500,
-                color: isDelete
-                    ? const Color(0xFFF44336)
-                    : const Color(0xFF41454A),
-                fontFamily: 'Plus Jakarta Sans',
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDestructive
+                  ? const Color(0xFFFFCDD2)
+                  : const Color(0xFFEEEEEE),
+              width: 1.5,
             ),
-          ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(child: Icon(icon, size: 24, color: color)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: isDestructive
+                            ? const Color(0xFFF44336)
+                            : const Color(0xFF41454A),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: const Color(0xFF9E9E9E),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 20,
+                color: const Color(0xFFBDBDBD),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -553,60 +965,314 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.4),
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Редактировать заказ'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Название',
-                    border: OutlineInputBorder(),
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 500,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 30,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 10),
                   ),
-                  maxLength: 70,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Описание',
-                    border: OutlineInputBorder(),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2196F3).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.edit_note_rounded,
+                              size: 22,
+                              color: Color(0xFF2196F3),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Редактировать заказ',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF41454A),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'ID: #$orderId',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF9E9E9E),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  maxLines: 4,
-                  maxLength: 9000,
-                ),
-              ],
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Название заказа',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF41454A),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFE0E0E0),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: TextField(
+                                  controller: titleController,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Color(0xFF41454A),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Введите название заказа',
+                                    hintStyle: TextStyle(
+                                      color: Color(0xFFBDBDBD),
+                                      fontSize: 16,
+                                    ),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                  ),
+                                  maxLength: 70,
+                                  maxLines: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '${titleController.text.length}/70',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9E9E9E),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Описание заказа',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF41454A),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                constraints: BoxConstraints(maxHeight: 200),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFE0E0E0),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Scrollbar(
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    child: TextField(
+                                      controller: descriptionController,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF41454A),
+                                        fontFamily: 'Plus Jakarta Sans',
+                                      ),
+                                      decoration: const InputDecoration(
+                                        hintText: 'Опишите подробности заказа',
+                                        hintStyle: TextStyle(
+                                          color: Color(0xFFBDBDBD),
+                                          fontSize: 16,
+                                        ),
+                                        border: InputBorder.none,
+                                        counterText: '',
+                                      ),
+                                      maxLines: null,
+                                      maxLength: 9000,
+                                      keyboardType: TextInputType.multiline,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '${descriptionController.text.length}/9000',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9E9E9E),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF5F6368),
+                              side: const BorderSide(
+                                color: Color(0xFFE0E0E0),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              backgroundColor: Colors.white,
+                            ),
+                            child: const Text(
+                              'Отмена',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final title = titleController.text.trim();
+                              final description = descriptionController.text
+                                  .trim();
+
+                              if (title.isEmpty || description.isEmpty) {
+                                _showCustomSnackBar(
+                                  message: 'Заполните все поля',
+                                  isSuccess: false,
+                                );
+                                return;
+                              }
+
+                              Navigator.pop(context);
+                              await _updateOrder(orderId, title, description);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2196F3),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
+                              shadowColor: Colors.transparent,
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.save_rounded,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Сохранить',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Отмена'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final title = titleController.text.trim();
-                final description = descriptionController.text.trim();
-
-                if (title.isEmpty || description.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Заполните все поля'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-
-                Navigator.pop(context);
-                await _updateOrder(orderId, title, description);
-              },
-              child: const Text('Сохранить'),
-            ),
-          ],
         );
       },
     );
@@ -617,13 +1283,10 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
     String title,
     String description,
   ) async {
+    HapticFeedback.mediumImpact();
+
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Сохранение изменений...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showCustomSnackBar(message: 'Сохранение изменений...', isSuccess: true);
 
       await ApiService.updateClientOrder(
         orderId: orderId,
@@ -631,57 +1294,36 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
         description: description,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Заказ успешно обновлен'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      HapticFeedback.heavyImpact();
+      _showCustomSnackBar(message: 'Заказ успешно обновлен', isSuccess: true);
 
       _loadOrders();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+      HapticFeedback.vibrate();
+      _showCustomSnackBar(
+        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
       );
     }
   }
 
   Future<void> _unpublishOrder(String orderId) async {
+    HapticFeedback.mediumImpact();
+
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Отзыв публикации...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showCustomSnackBar(message: 'Отзыв публикации...', isSuccess: true);
 
       await ApiService.changeOrderStatus(orderId: orderId, status: 'canceled');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Публикация отозвана'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      HapticFeedback.heavyImpact();
+      _showCustomSnackBar(message: 'Публикация отозвана', isSuccess: true);
 
       _loadOrders();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+      HapticFeedback.vibrate();
+      _showCustomSnackBar(
+        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
       );
     }
   }
@@ -714,49 +1356,30 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   }
 
   Future<void> _confirmArchiveOrder(String orderId) async {
+    HapticFeedback.mediumImpact();
+
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Архивация заказа...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showCustomSnackBar(message: 'Архивация заказа...', isSuccess: true);
 
       await ApiService.changeOrderStatus(orderId: orderId, status: 'archived');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Заказ архивирован'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      HapticFeedback.heavyImpact();
+      _showCustomSnackBar(message: 'Заказ архивирован', isSuccess: true);
 
       _loadOrders();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+      HapticFeedback.vibrate();
+      _showCustomSnackBar(
+        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
       );
     }
   }
 
-  // НОВЫЙ МЕТОД: Удаление заказа
   Future<void> _deleteOrder(String orderId) async {
     final orderIdInt = int.tryParse(orderId) ?? 0;
     if (orderIdInt == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Неверный ID заказа'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showCustomSnackBar(message: 'Неверный ID заказа', isSuccess: false);
       return;
     }
 
@@ -792,34 +1415,22 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   }
 
   Future<void> _confirmDeleteOrder(int orderId) async {
+    HapticFeedback.mediumImpact();
+
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Удаление заказа...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showCustomSnackBar(message: 'Удаление заказа...', isSuccess: true);
 
       await ApiService.deleteOrder(orderId);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Заказ успешно удален'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      HapticFeedback.heavyImpact();
+      _showCustomSnackBar(message: 'Заказ успешно удален', isSuccess: true);
 
       _loadOrders();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
+      HapticFeedback.vibrate();
+      _showCustomSnackBar(
+        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
       );
     }
   }
@@ -855,26 +1466,165 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
             icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+            
+            ),
+          ),
+        ),
       ),
       body: Column(
         children: [
+          if (_filterStatus != 'all' || _searchQuery.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          if (_filterStatus != 'all')
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _filterStatus == 'active'
+                                        ? 'Активные'
+                                        : 'Неактивные',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF0F7EDE),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _filterStatus = 'all';
+                                      });
+                                    },
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Color(0xFF0F7EDE),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (_searchQuery.isNotEmpty && _filterStatus != 'all')
+                            const SizedBox(width: 8),
+                          if (_searchQuery.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Поиск: "$_searchQuery"',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF0F7EDE),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _searchQuery = '';
+                                      });
+                                    },
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Color(0xFF0F7EDE),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${_filteredOrders.length} из ${_orders.length}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF9E9E9E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 8),
-
           if (_isLoading)
             Expanded(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Color(0xFF0F7EDE),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 1500),
+                      curve: Curves.easeInOut,
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: 1.0 + (value * 0.1).clamp(0.9, 1.1),
+                          child: const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFF0F7EDE),
+                            ),
+                            strokeWidth: 3,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Загрузка ваших заказов...',
+                      style: TextStyle(
+                        color: Color(0xFF5F6368),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     const Text(
-                      'Загрузка заказов...',
-                      style: TextStyle(color: Color(0xFF5F6368), fontSize: 16),
+                      'Это займет всего несколько секунд',
+                      style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
                     ),
                   ],
                 ),
@@ -913,33 +1663,79 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
                 ),
               ),
             )
-          else if (_orders.isEmpty)
+          else if (_filteredOrders.isEmpty)
             Expanded(
               child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/no_orders.png',
-                      width: 120,
-                      height: 120,
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'У вас пока нет заказов',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF41454A),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.8, end: 1.0),
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOutBack,
+                        builder: (context, scale, child) {
+                          return Transform.scale(
+                            scale: scale,
+                            child: Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.shopping_bag_outlined,
+                                size: 60,
+                                color: Color(0xFF0F7EDE),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Создайте свой первый заказ прямо сейчас',
-                      style: TextStyle(color: Color(0xFF5F6368), fontSize: 14),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                      const SizedBox(height: 24),
+                      Text(
+                        _searchQuery.isNotEmpty || _filterStatus != 'all'
+                            ? 'Ничего не найдено'
+                            : 'У вас пока нет заказов',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          _searchQuery.isNotEmpty || _filterStatus != 'all'
+                              ? 'Попробуйте изменить параметры поиска'
+                              : 'Создайте свой первый заказ и начните получать предложения от мастеров',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: const Color(0xFF9E9E9E),
+                            fontFamily: 'Plus Jakarta Sans',
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      if (_searchQuery.isNotEmpty || _filterStatus != 'all')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _searchQuery = '';
+                                _filterStatus = 'all';
+                              });
+                            },
+                            child: const Text('Сбросить фильтры'),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             )
@@ -953,38 +1749,70 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  itemCount: _orders.length,
+                  itemCount: _filteredOrders.length,
                   itemBuilder: (context, index) {
-                    final order = _orders[index];
-                    return _buildOrderItem(order);
+                    final order = _filteredOrders[index];
+                    return TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(milliseconds: 300 + (index * 50)),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, 20 * (1 - value)),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _buildOrderItem(order),
+                    );
                   },
                 ),
               ),
             ),
-
           if (!_isLoading && !_hasError)
             Container(
               color: Colors.transparent,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: ElevatedButton(
-                onPressed: _addNewOrder,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F7EDE),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: Color(0xFF0F7EDE), width: 1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                child: ElevatedButton(
+                  onPressed: _addNewOrder,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F7EDE),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(
+                        color: Color(0xFF0F7EDE),
+                        width: 1,
+                      ),
+                    ),
+                    minimumSize: const Size(double.infinity, 50),
+                    padding: const EdgeInsets.symmetric(vertical: 0),
                   ),
-                  minimumSize: const Size(double.infinity, 50),
-                  padding: const EdgeInsets.symmetric(vertical: 0),
-                ),
-                child: const Text(
-                  'Добавить заказ',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Plus Jakarta Sans',
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _orders.isEmpty ? Icons.add_circle_outline : Icons.add,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _orders.isEmpty
+                            ? 'Создать первый заказ'
+                            : 'Добавить заказ',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

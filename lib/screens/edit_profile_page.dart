@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
+import 'package:flutter_application_1/services/auth/auth_service.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 
 class VerificationModal extends StatefulWidget {
@@ -310,10 +313,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
   // Состояние данных
   bool _isLoading = true;
   bool _isSaving = false;
-  ProfileMode _currentProfileMode = ProfileMode.client; // Текущий режим из сервера
+  ProfileMode _currentProfileMode =
+      ProfileMode.client; // Текущий режим из сервера
   ProfileMode _selectedProfileMode = ProfileMode.client; // Выбранный режим в UI
   int? _selectedCityId;
   List<dynamic> _cities = [];
+  int ? _categoryId; // Для мастера - выбранная категория
+
+  // Для аватара
+  File? _avatarImage;
+  bool _isUploadingAvatar = false;
+  String? _avatarUrl;
 
   // Для модального окна подтверждения телефона
   String? _newPhoneNumber;
@@ -354,13 +364,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _surnameController.text = user['lastname'] ?? '';
         _patronymicController.text = user['patronymic'] ?? '';
         _phoneController.text = user['telephone'] ?? '';
+        _avatarUrl = user['avatar']; // Загружаем URL аватара
+
+        _categoryId = user['category'] != null ? user['category']['id'] : null;
 
         // Устанавливаем текущий режим из профиля
         final activeMode = user['activeMode'] ?? 'client';
         _currentProfileMode = activeMode == 'master'
             ? ProfileMode.master
             : ProfileMode.client;
-        
+
         // Изначально выбранный режим совпадает с текущим
         _selectedProfileMode = _currentProfileMode;
 
@@ -375,22 +388,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   // Проверка, изменились ли данные
   bool get _hasChanges {
-    final hasBasicChanges = _nameController.text.isNotEmpty &&
+    final hasBasicChanges =
+        _nameController.text.isNotEmpty &&
         _surnameController.text.isNotEmpty &&
         _selectedCityId != null;
-    
+
     // Проверяем, изменился ли режим профиля
     final hasModeChanged = _selectedProfileMode != _currentProfileMode;
-    
+
     return hasBasicChanges || hasModeChanged;
   }
 
-  // Проверка, изменился ли режим профиля
-  bool get _isProfileModeChanged => _selectedProfileMode != _currentProfileMode;
 
   // Обновление профиля
   Future<void> _updateProfile() async {
-    if (_nameController.text.isEmpty || _surnameController.text.isEmpty || _selectedCityId == null) {
+    if (_nameController.text.isEmpty ||
+        _surnameController.text.isEmpty ||
+        _selectedCityId == null) {
       _showErrorSnackBar('Заполните обязательные поля');
       return;
     }
@@ -405,7 +419,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ? null
             : _patronymicController.text.trim(),
         cityId: _selectedCityId!,
-        activeMode: _selectedProfileMode == ProfileMode.master ? 'master' : 'client',
+        activeMode: _selectedProfileMode == ProfileMode.master
+            ? 'master'
+            : 'client',
+            categoryId: _categoryId ?? 1
       );
 
       // Обновляем текущий режим после успешного сохранения
@@ -450,23 +467,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   String? _expectedCode;
-  Map<String, dynamic>? _serverPayload;
 
   Future<void> _fetchDebugInfo() async {
-    final data = await ApiService.getDebugSmsData(_newPhoneNumber!);
+    final data = await ApiService.getDebugSmsCode(_newPhoneNumber!);
     if (data != null && mounted) {
       setState(() {
-        _expectedCode = data['code'].toString();
-        _serverPayload = data['payload'];
+        _expectedCode = data;
       });
       print('[DEBUG] Получен код для проверки: $_expectedCode');
-      print('[DEBUG] Payload: $_serverPayload');
     }
   }
 
   // Показ модального окна подтверждения телефона
   Future<void> _showVerificationModal() async {
     try {
+      print(
+        '[DEBUG] Отправляем запрос на обновление телефона: $_newPhoneNumber',
+      );
       // Отправляем запрос на обновление телефона
       await ApiService.updateTelephone(telephone: _newPhoneNumber!);
       await _fetchDebugInfo();
@@ -493,7 +510,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (e.toString().contains('Code already sent')) {
         await _showVerificationModalDirectly();
       } else {
-        _showErrorSnackBar('Ошибка отправки кода');
+        print('[ERROR] Ошибка при отправке кода: $e');
+        _showErrorSnackBar('${e}');
       }
     }
   }
@@ -566,6 +584,181 @@ class _EditProfilePageState extends State<EditProfilePage> {
       // Если ошибка "код уже отправлен", игнорируем
       if (!e.toString().contains('Code already sent')) {
         _showErrorSnackBar('Ошибка отправки кода');
+      }
+    }
+  }
+
+  Future<void> _showImageSourceDialog() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Выберите источник',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D2125),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Кнопка "Сделать фото"
+                ListTile(
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F4FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Color(0xFF0F7EDE),
+                      size: 24,
+                    ),
+                  ),
+                  title: const Text(
+                    'Сделать фото',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1D2125),
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Использовать камеру',
+                    style: TextStyle(fontSize: 14, color: Color(0xFF8A8D90)),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(ImageSource.camera);
+                  },
+                ),
+
+                const SizedBox(height: 8),
+
+                // Кнопка "Выбрать из галереи"
+                ListTile(
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.photo_library_rounded,
+                      color: Color(0xFF5F6368),
+                      size: 24,
+                    ),
+                  ),
+                  title: const Text(
+                    'Выбрать из галереи',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1D2125),
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Выберите существующее фото',
+                    style: TextStyle(fontSize: 14, color: Color(0xFF8A8D90)),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(ImageSource.gallery);
+                  },
+                ),
+
+                const SizedBox(height: 20),
+
+                // Кнопка отмены
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFE53935),
+                    ),
+                    child: const Text(
+                      'Отмена',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ========== МЕТОДЫ ДЛЯ АВАТАРА ==========
+
+  // Метод для выбора изображения из галереи
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source, // Используем переданный источник
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (image != null && mounted) {
+        setState(() {
+          _avatarImage = File(image.path);
+        });
+
+        // Автоматически загружаем после выбора
+        await _uploadAvatar();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Ошибка выбора изображения: $e');
+    }
+  }
+
+  // Метод для загрузки аватара
+  Future<void> _uploadAvatar() async {
+    if (_avatarImage == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+
+    try {
+      final response = await ApiService.uploadAvatar(_avatarImage!);
+
+      if (mounted) {
+        // Обновляем URL аватара из ответа
+        setState(() {
+          _avatarUrl = response['data']?['avatar'];
+          _isUploadingAvatar = false;
+        });
+
+        _showSuccessSnackBar('Аватар успешно обновлен');
+
+        // Обновляем данные профиля
+        await _loadInitialData();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+        _showErrorSnackBar('Ошибка загрузки аватара: ${e.toString()}');
       }
     }
   }
@@ -643,9 +836,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
         ),
         actions: [
-          if (displayMode == ProfileMode.master)
+         
             IconButton(
-              onPressed: () {},
+              onPressed: () async {
+                await AuthService.clearAuthData();
+                if (mounted)
+                  Navigator.pushReplacementNamed(context, '/registration');
+              },
               icon: Image.asset('assets/logout.png', width: 22, height: 22),
             ),
         ],
@@ -728,7 +925,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
 
           // Индикатор загрузки
-          if (_isSaving)
+          if (_isSaving || _isUploadingAvatar)
             Container(
               color: Colors.black.withOpacity(0.3),
               child: const Center(
@@ -786,6 +983,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return Center(
       child: Stack(
         children: [
+          // Аватар (код без изменений)
           Container(
             width: 120,
             height: 120,
@@ -804,65 +1002,71 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
               ],
             ),
-            child: const CircleAvatar(
-              backgroundColor: Colors.transparent,
-              backgroundImage: AssetImage('assets/avatar.png'),
+            child: ClipOval(
+              child: _isUploadingAvatar
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                        strokeWidth: 3,
+                      ),
+                    )
+                  : _avatarImage != null
+                  ? Image.file(
+                      _avatarImage!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.white,
+                        );
+                      },
+                    )
+                  : (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                  ? Image.network(
+                      'http://gj-back.checkedout.kz/storage/${_avatarUrl}',
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.white,
+                        );
+                      },
+                    )
+                  : const Icon(Icons.person, size: 60, color: Colors.white),
             ),
           ),
+
+          // Кнопка добавления/изменения аватара - ИЗМЕНЕННЫЙ onTap
           Positioned(
             bottom: 0,
             right: 0,
             child: GestureDetector(
-              onTap: () {
-                // TODO: Реализовать изменение аватара
-              },
+              onTap: _isUploadingAvatar
+                  ? null
+                  : _showImageSourceDialog, // Теперь открывает диалог
               child: Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF0F7EDE),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
+                      blurRadius: 6,
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.camera_alt_rounded,
-                  color: Color(0xFF0F7EDE),
+                  color: Colors.white,
                   size: 18,
                 ),
               ),
             ),
           ),
-          if (_selectedProfileMode == ProfileMode.master)
-            Positioned(
-              top: 0,
-              right: 0,
-              child: GestureDetector(
-                onTap: () {
-                  // TODO: Реализовать удаление аватара
-                },
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F7EDE),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 20),
-                ),
-              ),
-            ),
         ],
       ),
     );

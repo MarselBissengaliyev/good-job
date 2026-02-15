@@ -5,6 +5,7 @@ import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/services/api_service.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 
 class AddOrderClientPage extends StatefulWidget {
   const AddOrderClientPage({super.key});
@@ -38,11 +39,26 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
   String? _selectedCategoryName;
   String? _selectedCityName;
 
+  // Overlay для модалок
+  OverlayEntry? _categoryOverlayEntry;
+  OverlayEntry? _cityOverlayEntry;
+  final LayerLink _categoryLayerLink = LayerLink();
+  final LayerLink _cityLayerLink = LayerLink();
+  final GlobalKey _categoryKey = GlobalKey();
+  final GlobalKey _cityKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
     _loadCategories();
     _loadCities();
+  }
+
+  @override
+  void dispose() {
+    _removeCategoryOverlay();
+    _removeCityOverlay();
+    super.dispose();
   }
 
   Future<void> _loadCategories() async {
@@ -83,7 +99,17 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
     }
   }
 
-  void _showCategorySelector() {
+  // Управление overlay для категории
+  void _toggleCategoryOverlay() {
+    if (_categoryOverlayEntry != null) {
+      _removeCategoryOverlay();
+    } else {
+      _removeCityOverlay();
+      _showCategoryOverlay();
+    }
+  }
+
+  void _showCategoryOverlay() {
     if (_isLoadingCategories || _categories.isEmpty) {
       if (_categories.isEmpty && !_isLoadingCategories) {
         _showError('Категории не загружены');
@@ -91,158 +117,122 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
       return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: DraggableScrollableSheet(
-            initialChildSize: 0.6,
-            minChildSize: 0.4,
-            maxChildSize: 0.8,
-            builder: (context, scrollController) {
-              return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
+    final renderBox =
+        _categoryKey.currentContext?.findRenderObject() as RenderBox?;
+    final size = renderBox?.size ?? Size.zero;
+    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+    _categoryOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx,
+        top: offset.dy + size.height + 4,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: size.width * 1.5,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 1,
                 ),
-                child: Column(
-                  children: [
-                    // Заголовок с хэндлом для перетаскивания
-                    Container(
-                      padding: const EdgeInsets.only(top: 12, bottom: 8),
-                      child: Center(
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Заголовок
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Категория',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: _removeCategoryOverlay,
                         child: Container(
-                          width: 40,
-                          height: 4,
+                          width: 24,
+                          height: 24,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE8EAED),
-                            borderRadius: BorderRadius.circular(2),
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Color(0xFF5F6368),
                           ),
                         ),
                       ),
-                    ),
-
-                    // Заголовок
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Выберите категорию',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF41454A),
-                              fontFamily: 'Plus Jakarta Sans',
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.close,
-                              size: 24,
-                              color: Color(0xFF5F6368),
-                            ),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const Divider(height: 1, color: Color(0xFFE8EAED)),
-
-                    // Список категорий
-                    Expanded(
-                      child: _categories.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Категории не найдены',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Color(0xFF5F6368),
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              controller: scrollController,
-                              itemCount: _categories.length,
-                              itemBuilder: (context, index) {
-                                final category = _categories[index];
-                                final categoryId = category['id']?.toString();
-                                final categoryName =
-                                    category['name']?.toString() ??
-                                    'Без названия';
-
-                                return ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
-                                  ),
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF5F5F5),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Center(
-                                      child: Image.asset(
-                                        'assets/handyman.png',
-                                        width: 24,
-                                        height: 24,
-                                        color: const Color(0xFF5F6368),
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    categoryName,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF41454A),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                  trailing: _selectedCategoryId == categoryId
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: Color(0xFF0F7EDE),
-                                          size: 24,
-                                        )
-                                      : null,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedCategoryId = categoryId;
-                                      _selectedCategoryName = categoryName;
-                                    });
-                                    Navigator.pop(context);
-                                  },
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              );
-            },
+
+                // Список категорий
+                SizedBox(
+                  height: (_categories.length * 44.0).clamp(100.0, 300.0),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: _categories.length,
+                    itemBuilder: (context, index) {
+                      final category = _categories[index];
+                      final categoryId = category['id']?.toString();
+                      final categoryName =
+                          category['name']?.toString() ?? 'Без названия';
+                      return _buildSelectableItem(
+                        text: categoryName,
+                        isSelected: _selectedCategoryId == categoryId,
+                        onTap: () {
+                          setState(() {
+                            _selectedCategoryId = categoryId;
+                            _selectedCategoryName = categoryName;
+                          });
+                          _removeCategoryOverlay();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ),
+      ),
     );
+
+    Overlay.of(context).insert(_categoryOverlayEntry!);
   }
 
-  void _showCitySelector() {
+  void _removeCategoryOverlay() {
+    _categoryOverlayEntry?.remove();
+    _categoryOverlayEntry = null;
+  }
+
+  // Управление overlay для города
+  void _toggleCityOverlay() {
+    if (_cityOverlayEntry != null) {
+      _removeCityOverlay();
+    } else {
+      _removeCategoryOverlay();
+      _showCityOverlay();
+    }
+  }
+
+  void _showCityOverlay() {
     if (_isLoadingCities || _cities.isEmpty) {
       if (_cities.isEmpty && !_isLoadingCities) {
         _showError('Города не загружены');
@@ -250,152 +240,163 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
       return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: DraggableScrollableSheet(
-            initialChildSize: 0.6,
-            minChildSize: 0.4,
-            maxChildSize: 0.8,
-            builder: (context, scrollController) {
-              return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
+    final renderBox = _cityKey.currentContext?.findRenderObject() as RenderBox?;
+    final size = renderBox?.size ?? Size.zero;
+    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+    _cityOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx,
+        top: offset.dy + size.height + 4,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: size.width * 1.5,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 1,
                 ),
-                child: Column(
-                  children: [
-                    // Заголовок с хэндлом для перетаскивания
-                    Container(
-                      padding: const EdgeInsets.only(top: 12, bottom: 8),
-                      child: Center(
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Заголовок
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Город',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: _removeCityOverlay,
                         child: Container(
-                          width: 40,
-                          height: 4,
+                          width: 24,
+                          height: 24,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE8EAED),
-                            borderRadius: BorderRadius.circular(2),
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Color(0xFF5F6368),
                           ),
                         ),
                       ),
-                    ),
-
-                    // Заголовок
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Выберите город',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF41454A),
-                              fontFamily: 'Plus Jakarta Sans',
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.close,
-                              size: 24,
-                              color: Color(0xFF5F6368),
-                            ),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const Divider(height: 1, color: Color(0xFFE8EAED)),
-
-                    // Список городов
-                    Expanded(
-                      child: _cities.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Города не найдены',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Color(0xFF5F6368),
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              controller: scrollController,
-                              itemCount: _cities.length,
-                              itemBuilder: (context, index) {
-                                final city = _cities[index];
-                                final cityId = city['id']?.toString();
-                                final cityName =
-                                    city['name']?.toString() ?? 'Без названия';
-
-                                return ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  leading: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF5F5F5),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.location_on,
-                                        color: Color(0xFF5F6368),
-                                        size: 24,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    cityName,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF41454A),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                  trailing: _selectedCityId == cityId
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: Color(0xFF0F7EDE),
-                                          size: 24,
-                                        )
-                                      : null,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedCityId = cityId;
-                                      _selectedCityName = cityName;
-                                    });
-                                    Navigator.pop(context);
-                                  },
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              );
-            },
+
+                // Список городов
+                SizedBox(
+                  height: (_cities.length * 44.0).clamp(100.0, 300.0),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: _cities.length,
+                    itemBuilder: (context, index) {
+                      final city = _cities[index];
+                      final cityId = city['id']?.toString();
+                      final cityName =
+                          city['name']?.toString() ?? 'Без названия';
+                      return _buildSelectableItem(
+                        text: cityName,
+                        isSelected: _selectedCityId == cityId,
+                        onTap: () {
+                          setState(() {
+                            _selectedCityId = cityId;
+                            _selectedCityName = cityName;
+                          });
+                          _removeCityOverlay();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_cityOverlayEntry!);
+  }
+
+  void _removeCityOverlay() {
+    _cityOverlayEntry?.remove();
+    _cityOverlayEntry = null;
+  }
+
+  // Общий виджет для элементов выбора
+  Widget _buildSelectableItem({
+    required String text,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          border: isSelected
+              ? const Border(
+                  left: BorderSide(color: Color(0xFF0F7EDE), width: 3),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFF0F7EDE)
+                      : const Color(0xFFCBCDCE),
+                  width: 1.5,
+                ),
+                color: isSelected ? const Color(0xFF0F7EDE) : Colors.white,
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isSelected
+                      ? const Color(0xFF0F7EDE)
+                      : const Color(0xFF41454A),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -403,76 +404,135 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
     try {
       final picker = ImagePicker();
 
-      // Показываем диалог выбора источника
-      final source = await showModalBottomSheet<ImageSource>(
+      // Показываем компактный диалог выбора источника
+      showDialog(
         context: context,
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (context) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(
-                  Icons.photo_library,
-                  color: Color(0xFF0F7EDE),
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                const Text(
+                  'Добавить фото',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF41454A),
+                  ),
                 ),
-                title: const Text('Галерея'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt, color: Color(0xFF0F7EDE)),
-                title: const Text('Сделать фото'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Кнопка галереи
+                    _buildImageSourceButton(
+                      icon: Icons.photo_library,
+                      label: 'Галерея',
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _pickFromGallery();
+                      },
+                    ),
+
+                    // Кнопка камеры
+                    _buildImageSourceButton(
+                      icon: Icons.camera_alt,
+                      label: 'Камера',
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _takePhoto();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       );
-
-      if (source == null) return;
-
-      if (source == ImageSource.gallery) {
-        // Выбор нескольких фото из галереи
-        final pickedFiles = await picker.pickMultiImage(
-          maxWidth: 1200,
-          maxHeight: 1200,
-          imageQuality: 80,
-        );
-
-        if (pickedFiles.isNotEmpty) {
-          setState(() {
-            for (var pickedFile in pickedFiles) {
-              if (_selectedImages.length < 10) {
-                _selectedImages.add(File(pickedFile.path));
-              }
-            }
-          });
-        }
-      } else {
-        // Сделать одно фото
-        final pickedFile = await picker.pickImage(
-          source: source,
-          maxWidth: 1200,
-          maxHeight: 1200,
-          imageQuality: 80,
-        );
-
-        if (pickedFile != null) {
-          setState(() {
-            if (_selectedImages.length < 10) {
-              _selectedImages.add(File(pickedFile.path));
-            } else {
-              _showError('Максимум 10 изображений');
-            }
-          });
-        }
-      }
     } catch (e) {
       _showError('Ошибка при выборе изображений: $e');
+    }
+  }
+
+  Widget _buildImageSourceButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FBFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE3F2FD)),
+              ),
+              child: Icon(icon, color: const Color(0xFF0F7EDE), size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF41454A)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickFromGallery() async {
+    final picker = ImagePicker();
+    final pickedFiles = await picker.pickMultiImage(
+      maxWidth: 1200,
+      maxHeight: 1200,
+      imageQuality: 80,
+    );
+
+    if (pickedFiles.isNotEmpty) {
+      setState(() {
+        for (var pickedFile in pickedFiles) {
+          if (_selectedImages.length < 10) {
+            _selectedImages.add(File(pickedFile.path));
+          } else {
+            _showError('Максимум 10 изображений');
+            break;
+          }
+        }
+      });
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      imageQuality: 80,
+    );
+
+    if (pickedFile != null) {
+      setState(() {
+        if (_selectedImages.length < 10) {
+          _selectedImages.add(File(pickedFile.path));
+        } else {
+          _showError('Максимум 10 изображений');
+        }
+      });
     }
   }
 
@@ -486,6 +546,11 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
     // Валидация основных полей
     if (_taskController.text.isEmpty || _taskController.text.length < 16) {
       _showError('Введите название задачи (минимум 16 символов)');
+      return;
+    }
+
+    if (_selectedImages.isEmpty) {
+      _showError('Добавьте хотя бы одно изображение');
       return;
     }
 
@@ -563,21 +628,45 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
       // 3. Показываем успешное сообщение
       _showSuccess('Заказ успешно создан!');
 
-      // ДОБАВЛЕНО: Отладочный вывод
-      print('✅ Заказ создан успешно! Данные: $result');
-      if (result['data'] != null) {
-        final orderData = result['data'];
-        print('ID заказа: ${orderData['id']}');
-        print('Название: ${orderData['title']}');
-        print('Цена: ${orderData['price']}');
-        print('Категория: ${orderData['category']}');
-      }
-
       // 4. Возвращаемся назад через 1 секунду
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      _showError('Ошибка создания заказа: $e');
+      print('Ошибка при создании заказа: $e');
+      String errorMessage = 'Произошла ошибка';
+
+      if (e is DioException) {
+        final responseData = e.response?.data;
+
+        if (responseData is Map<String, dynamic>) {
+          final message = responseData['message'];
+          final errors = responseData['errors'];
+
+          if (errors is Map<String, dynamic> && errors.isNotEmpty) {
+            // Формируем сообщение об ошибках валидации
+            final buffer = StringBuffer();
+            buffer.writeln('Ошибка валидации данных:');
+
+            errors.forEach((field, messages) {
+              if (messages is List) {
+                for (var msg in messages) {
+                  buffer.writeln('• $field: $msg');
+                }
+              } else if (messages is String) {
+                buffer.writeln('• $field: $messages');
+              }
+            });
+
+            errorMessage = buffer.toString().trim();
+          } else if (message != null && message.toString().isNotEmpty) {
+            errorMessage = message.toString();
+          }
+        }
+      } else {
+        errorMessage = e.toString();
+      }
+
+      _showError(errorMessage);
     } finally {
       if (mounted) {
         setState(() {
@@ -588,21 +677,50 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    // Если сообщение слишком длинное, показываем его в диалоге
+    if (message.length > 100) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Ошибка'),
+          content: SingleChildScrollView(child: Text(message)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(message, style: const TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -674,7 +792,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                         controller: _taskController,
                         maxLength: 70,
                         onChanged: (value) {
-                          setState(() {}); // Принудительно обновляем состояние
+                          setState(() {});
                         },
                         decoration: InputDecoration(
                           hintText: 'Что нужно выполнить?',
@@ -744,56 +862,68 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                       const SizedBox(height: 20),
 
                       // Селект "Категория"
-                      GestureDetector(
-                        onTap: () => _showCategorySelector(),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE8EAED)),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
+                      CompositedTransformTarget(
+                        link: _categoryLayerLink,
+                        child: GestureDetector(
+                          key: _categoryKey,
+                          onTap: _toggleCategoryOverlay,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: _categoryOverlayEntry != null
+                                    ? const Color(0xFF0F7EDE)
+                                    : const Color(0xFFE8EAED),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Image.asset(
-                                        'assets/handyman.png',
-                                        width: 20,
-                                        height: 20,
-                                        color: const Color(0xFF5F6368),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          _selectedCategoryName ??
-                                              'Выберите категорию',
-                                          style: TextStyle(
-                                            fontSize: 17,
-                                            color: _selectedCategoryName == null
-                                                ? const Color(
-                                                    0xFF41454A,
-                                                  ).withOpacity(0.6)
-                                                : const Color(0xFF41454A),
-                                            fontFamily: 'Plus Jakarta Sans',
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.category_outlined,
+                                          size: 20,
+                                          color: _selectedCategoryName == null
+                                              ? const Color(0xFF5F6368)
+                                              : const Color(0xFF0F7EDE),
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            _selectedCategoryName ??
+                                                'Выберите категорию',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color:
+                                                  _selectedCategoryName == null
+                                                  ? const Color(0xFF5F6368)
+                                                  : const Color(0xFF41454A),
+                                              fontFamily: 'Plus Jakarta Sans',
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const Icon(
-                                  Icons.arrow_drop_down,
-                                  color: Color(0xFF5F6368),
-                                  size: 24,
-                                ),
-                              ],
+                                  Icon(
+                                    _categoryOverlayEntry != null
+                                        ? Icons.arrow_drop_up
+                                        : Icons.arrow_drop_down,
+                                    color: const Color(0xFF5F6368),
+                                    size: 24,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -845,9 +975,9 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(8),
-                                  color: const Color(0xFFF5F5F5),
+                                  color: const Color(0xFFF8FBFF),
                                   border: Border.all(
-                                    color: const Color(0xFFE8EAED),
+                                    color: const Color(0xFFE3F2FD),
                                   ),
                                 ),
                                 child: const Center(
@@ -855,16 +985,16 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.add_photo_alternate,
-                                        color: Color(0xFF5F6368),
-                                        size: 32,
+                                        Icons.add_photo_alternate_outlined,
+                                        color: Color(0xFF0F7EDE),
+                                        size: 28,
                                       ),
                                       SizedBox(height: 4),
                                       Text(
                                         'Добавить',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Color(0xFF5F6368),
+                                          color: Color(0xFF0F7EDE),
                                         ),
                                       ),
                                     ],
@@ -876,13 +1006,13 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                             // Отображение выбранного изображения
                             return Stack(
                               children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    image: DecorationImage(
-                                      image: FileImage(_selectedImages[index]),
-                                      fit: BoxFit.cover,
-                                    ),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(
+                                    _selectedImages[index],
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
                                   ),
                                 ),
                                 Positioned(
@@ -1009,38 +1139,64 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                       const SizedBox(height: 12),
 
                       // Селект города
-                      GestureDetector(
-                        onTap: () => _showCitySelector(),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE8EAED)),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _selectedCityName ?? 'Выберите город',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: _selectedCityName == null
-                                        ? const Color(0xFFCBCDCE)
-                                        : const Color(0xFF41454A),
-                                    fontFamily: 'Plus Jakarta Sans',
+                      CompositedTransformTarget(
+                        link: _cityLayerLink,
+                        child: GestureDetector(
+                          key: _cityKey,
+                          onTap: _toggleCityOverlay,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: _cityOverlayEntry != null
+                                    ? const Color(0xFF0F7EDE)
+                                    : const Color(0xFFE8EAED),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.location_on_outlined,
+                                        size: 20,
+                                        color: _selectedCityName == null
+                                            ? const Color(0xFF5F6368)
+                                            : const Color(0xFF0F7EDE),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedCityName ?? 'Выберите город',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: _selectedCityName == null
+                                                ? const Color(0xFF5F6368)
+                                                : const Color(0xFF41454A),
+                                            fontFamily: 'Plus Jakarta Sans',
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              const Icon(
-                                Icons.arrow_drop_down,
-                                color: Color(0xFF5F6368),
-                                size: 24,
-                              ),
-                            ],
+                                Icon(
+                                  _cityOverlayEntry != null
+                                      ? Icons.arrow_drop_up
+                                      : Icons.arrow_drop_down,
+                                  color: const Color(0xFF5F6368),
+                                  size: 24,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1077,6 +1233,11 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.place_outlined,
+                            size: 20,
+                            color: Color(0xFF5F6368),
                           ),
                         ),
                         style: const TextStyle(
@@ -1220,6 +1381,11 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                             horizontal: 16,
                             vertical: 14,
                           ),
+                          prefixIcon: const Icon(
+                            Icons.phone_outlined,
+                            size: 20,
+                            color: Color(0xFF5F6368),
+                          ),
                         ),
                         style: const TextStyle(
                           fontSize: 16,
@@ -1263,6 +1429,11 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> {
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.attach_money_outlined,
+                            size: 20,
+                            color: Color(0xFF5F6368),
                           ),
                           suffixText: '₸',
                           suffixStyle: const TextStyle(
