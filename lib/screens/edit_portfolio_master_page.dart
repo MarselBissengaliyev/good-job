@@ -35,6 +35,7 @@ class _EditPortfolioMasterPageState extends State<EditPortfolioMasterPage> {
 
     try {
       final photos = await ApiService.getWorkPhotos();
+      print("yes '$photos");
       setState(() {
         _portfolioImages = photos.isNotEmpty ? photos : [];
       });

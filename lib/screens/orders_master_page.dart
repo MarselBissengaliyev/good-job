@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
+import 'package:flutter_application_1/screens/order_client_page.dart'; // Добавлен импорт
 import 'package:flutter_application_1/services/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class OrdersMasterPage extends StatefulWidget {
   const OrdersMasterPage({super.key});
@@ -236,6 +238,17 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
     });
   }
 
+  Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось открыть ссылку: $url')),
+        );
+      }
+    }
+  }
+
   // Функция для сброса фильтров
   void _resetFilters() {
     setState(() {
@@ -247,6 +260,32 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
     _removePriceOverlay();
     // Загружаем все заказы без фильтрации по дате
     _fetchOrders();
+  }
+
+  // ДОБАВЛЕНО: Функция для перехода на страницу заказа
+  void _navigateToOrderDetail(Map<String, dynamic> order) {
+    // Получаем ID заказа
+    final orderId = order['id']?.toString();
+
+    if (orderId != null && orderId.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OrderClientPage(
+            orderId: orderId,
+            isMyOrder: false, // Важно: для мастера это чужой заказ
+          ),
+        ),
+      );
+    } else {
+      // Если ID не найден, показываем ошибку
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ошибка: ID заказа не найден'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // Функция для показа номера телефона
@@ -335,19 +374,12 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('Вызов инициирован...'),
-                              duration: const Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          );
+
+                          await _launchUrl('tel:+$phoneNumber');
                         },
+
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F7EDE),
                           foregroundColor: Colors.white,
@@ -1314,7 +1346,11 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
       itemCount: _filteredOrders.length,
       itemBuilder: (context, index) {
         final order = _filteredOrders[index];
-        return _buildOrderItem(order);
+        return GestureDetector(
+          onTap: () =>
+              _navigateToOrderDetail(order), // ДОБАВЛЕНО: обработчик клика
+          child: _buildOrderItem(order),
+        );
       },
     );
   }
@@ -1461,7 +1497,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
 
                       const SizedBox(height: 8),
 
-                      // Категория и город
+                      // Город
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
@@ -1546,42 +1582,78 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
                 const Spacer(),
 
                 // Кнопка "Показать телефон"
-                OutlinedButton(
-                  onPressed: () {
-                    _showPhoneNumber(
-                      order['telephone']?.toString() ?? '+7 (777) 123-45-67',
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF0F7EDE),
-                    side: const BorderSide(
-                      color: Color(0xFF0F7EDE),
-                      width: 1.5,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.phone_outlined, size: 16),
-                      SizedBox(width: 6),
-                      Text(
-                        'Показать телефон',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
+                // Кнопка "Показать телефон" или сообщение об отсутствии подписки
+                if (order['telephone'] != null &&
+                    order['telephone'].toString().isNotEmpty)
+                  OutlinedButton(
+                    onPressed: () {
+                      _showPhoneNumber(order['telephone'].toString());
+                    },
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF0F7EDE),
+                      side: const BorderSide(
+                        color: Color(0xFF0F7EDE),
+                        width: 1.5,
                       ),
-                    ],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.phone_outlined, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Показать телефон',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFFECACA),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Color(0xFFDC2626),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Нет подписки',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFFDC2626),
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),

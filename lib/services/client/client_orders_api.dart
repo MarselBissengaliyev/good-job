@@ -37,7 +37,7 @@ class ClientOrdersApi {
     String? status,
   }) async {
     const method = 'PUT';
-    final url = '/me/client/orders/$orderId';
+    final url = '/orders/$orderId';
     
     final body = <String, dynamic>{};
     if (title != null && title.isNotEmpty) body['title'] = title;

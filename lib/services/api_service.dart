@@ -82,6 +82,8 @@ class ApiService {
     required int cityId,
     required String activeMode,
     required int categoryId,
+     String? instUsername,
+     String? ttUsername,
   }) => _profileApi.updateProfile(
     firstname: firstname,
     lastname: lastname,
@@ -89,6 +91,8 @@ class ApiService {
     cityId: cityId,
     activeMode: activeMode,
     categoryId: categoryId,
+    instUsername: instUsername,
+    ttUsername: ttUsername
   );
 
   static Future<Map<String, dynamic>> updateTelephone({

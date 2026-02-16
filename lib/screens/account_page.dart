@@ -9,6 +9,7 @@ import 'package:flutter_application_1/screens/help_page.dart';
 import '../services/api_service.dart';
 import '../services/auth/auth_service.dart';
 import 'my_orders_client_page.dart';
+import 'package:url_launcher/url_launcher.dart'; // Добавьте в начало файла
 
 enum AccountType { client, master }
 
@@ -37,6 +38,62 @@ class _AccountPageState extends State<AccountPage> {
     _loadUserProfile();
   }
 
+  Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось открыть ссылку: $url')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openSocialLink(String? username, String platform) async {
+    if (username == null || username.isEmpty) {
+      _showSnackBar('Имя пользователя не указано', isError: true);
+      return;
+    }
+
+    String url;
+
+    // Формируем URL в зависимости от платформы
+    switch (platform) {
+      case 'instagram':
+        // Очищаем username от @ если есть
+        final cleanUsername = username.replaceAll('@', '');
+        // Пробуем открыть в приложении, если не получается - в браузере
+        url = 'https://instagram.com/$cleanUsername';
+        break;
+      case 'tiktok':
+        final cleanUsername = username.replaceAll('@', '');
+        url = 'https://tiktok.com/@$cleanUsername';
+        break;
+      default:
+        return;
+    }
+
+    try {
+      _launchUrl(url);
+    } catch (e) {
+      _showSnackBar('Ошибка при открытии ссылки', isError: true);
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError
+            ? const Color(0xFFE53935)
+            : const Color(0xFF0F7EDE),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -57,6 +114,12 @@ class _AccountPageState extends State<AccountPage> {
           if (activeValue != null) {
             _activeMode = activeValue;
           }
+
+          // Синхронизируем selectedCategory с загруженными данными
+          if (userData?['category'] != null) {
+            selectedCategory = userData!['category']['name'];
+          }
+
           print('Загружены данные пользователя: $userData');
           print('Active mode: $_activeMode');
 
@@ -125,46 +188,49 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 
-  Future<void> _updateUserCategory(int categoryId) async {
-    try {
-      setState(() => isLoading = true);
+Future<void> _updateUserCategory(int categoryId) async {
+  try {
+    setState(() => isLoading = true);
 
-      final response = await ApiService.updateUserCategory(categoryId);
+    // Отправляем запрос на обновление категории
+    final response = await ApiService.updateUserCategory(categoryId);
 
+    if (mounted) {
+      // После успешного обновления, загружаем полный профиль заново
+      // чтобы получить актуальные данные включая категорию
+      final profileResponse = await ApiService.getProfile();
+      
       if (mounted) {
         setState(() {
-          // Обновляем данные пользователя
-          if (userData != null && response['data'] != null) {
-            userData!['category'] = response['data']['category'];
+          // Обновляем userData полными данными из профиля
+          userData = profileResponse['data'];
+          
+          // Обновляем selectedCategory
+          if (userData?['category'] != null) {
+            selectedCategory = userData!['category']['name'];
+          } else {
+            selectedCategory = null;
           }
-
-          // Находим выбранную категорию для отображения
-          final selectedCategoryData = categories.firstWhere(
-            (cat) => cat['id'] == categoryId,
-            orElse: () => null,
-          );
-
-          if (selectedCategoryData != null) {
-            selectedCategory = selectedCategoryData['name'];
-          }
-
+          
           isLoading = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Категория успешно обновлена')),
         );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления категории: $e')),
-        );
+        
+        print('✅ Категория обновлена: ${userData?['category']?['name']}');
       }
     }
+  } catch (e) {
+    if (mounted) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка обновления категории: $e')),
+      );
+    }
   }
-
+}
   bool get _isMaster => _activeMode == 'master';
 
   // Метод для определения типа аккаунта для bottom navigation
@@ -486,240 +552,314 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  void _showCategoryBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Container(
-              padding: const EdgeInsets.all(24),
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.8,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Выберите категорию',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF41454A),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
+void _showCategoryBottomSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    isScrollControlled: true,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Выберите категорию',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF41454A),
+                    fontFamily: 'Plus Jakarta Sans',
                   ),
-                  const SizedBox(height: 16),
-                  // Список категорий
-                  Expanded(
-                    child: isLoadingCategories
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFF0F7EDE),
-                              ),
+                ),
+                const SizedBox(height: 16),
+                // Список категорий
+                Expanded(
+                  child: isLoadingCategories
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFF0F7EDE),
                             ),
-                          )
-                        : categories.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Категории не найдены',
-                              style: TextStyle(
-                                color: Color(0xFF9AA0A6),
-                                fontSize: 16,
-                              ),
+                          ),
+                        )
+                      : categories.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Категории не найдены',
+                            style: TextStyle(
+                              color: Color(0xFF9AA0A6),
+                              fontSize: 16,
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: categories.length,
-                            itemBuilder: (context, index) {
-                              final category = categories[index];
-                              final isSelected =
-                                  userData?['category']?['id'] ==
-                                  category['id'];
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final category = categories[index];
+                            // Используем актуальные данные из userData
+                            final isSelected =
+                                userData?['category']?['id'] == category['id'];
 
-                              return Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () async {
-                                    Navigator.pop(context);
-                                    await _updateUserCategory(category['id']);
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: Colors.grey.shade200,
-                                        ),
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () async {
+                                  // Сначала закрываем bottom sheet
+                                  Navigator.pop(context);
+                                  // Затем обновляем категорию
+                                  await _updateUserCategory(category['id']);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey.shade200,
                                       ),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            category['name'] ?? 'Без названия',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w400,
-                                              color: isSelected
-                                                  ? const Color(0xFF0F7EDE)
-                                                  : const Color(0xFF41454A),
-                                              fontFamily: 'Plus Jakarta Sans',
-                                            ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          category['name'] ?? 'Без названия',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w600
+                                                : FontWeight.w400,
+                                            color: isSelected
+                                                ? const Color(0xFF0F7EDE)
+                                                : const Color(0xFF41454A),
+                                            fontFamily: 'Plus Jakarta Sans',
                                           ),
                                         ),
-                                        if (isSelected)
-                                          const Icon(
-                                            Icons.check,
-                                            color: Color(0xFF0F7EDE),
-                                            size: 20,
-                                          ),
-                                      ],
-                                    ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check,
+                                          color: Color(0xFF0F7EDE),
+                                          size: 20,
+                                        ),
+                                    ],
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                  ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
 
-                  // Кнопка закрытия
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF5F5F5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
+                // Кнопка закрытия
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF5F5F5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        'Закрыть',
-                        style: TextStyle(
-                          color: Color(0xFF41454A),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Закрыть',
+                      style: TextStyle(
+                        color: Color(0xFF41454A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
                   ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+Widget _buildCategorySelector() {
+  // Получаем название категории напрямую из userData
+  String categoryName = 'Выберите категорию';
+
+  if (userData?['category'] != null) {
+    categoryName = userData!['category']['name'] ?? 'Выберите категорию';
   }
 
-  Widget _buildCategorySelector() {
-    return GestureDetector(
-      onTap: () => _showCategoryBottomSheet(context),
-      child: Container(
-        width: double.infinity,
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE0E0E0)),
-        ),
-        child: Row(
-          children: [
-            Image.asset('assets/handyman.png', width: 24, height: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                userData?['category']?['name'] ?? 'Выберите категорию',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  color: Color(0xFF41454A),
-                  fontFamily: 'Plus Jakarta Sans',
-                ),
+  return GestureDetector(
+    onTap: () => _showCategoryBottomSheet(context),
+    child: Container(
+      width: double.infinity,
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        children: [
+          Image.asset('assets/handyman.png', width: 24, height: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              categoryName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF41454A),
+                fontFamily: 'Plus Jakarta Sans',
               ),
             ),
-            const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9AA0A6)),
-          ],
-        ),
+          ),
+          const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9AA0A6)),
+        ],
       ),
-    );
-  }
-
+    ),
+  );
+}
   Widget _buildSocialLinks() {
     return Row(
       children: [
         // TikTok
         Expanded(
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE0E0E0)),
-            ),
-            child: Row(
-              children: [
-                Image.asset('assets/tiktok.png', width: 24, height: 24),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    userData?['ttUrl'] ?? 'TikTok',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF41454A),
-                      fontFamily: 'Plus Jakarta Sans',
+          child: GestureDetector(
+            onTap: () => _openSocialLink(userData?['ttUsername'], 'tiktok'),
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+              ),
+              child: Row(
+                children: [
+                  Image.asset(
+                    'assets/tiktok.png',
+                    width: 24,
+                    height: 24,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.music_note,
+                        color: Colors.black,
+                        size: 24,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      userData?['ttUsername'] != null &&
+                              userData!['ttUsername'].toString().isNotEmpty
+                          ? '@${userData!['ttUsername']}'
+                          : 'TikTok',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight:
+                            userData?['ttUsername'] != null &&
+                                userData!['ttUsername'].toString().isNotEmpty
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                        color:
+                            userData?['ttUsername'] != null &&
+                                userData!['ttUsername'].toString().isNotEmpty
+                            ? const Color(0xFF41454A)
+                            : const Color(0xFF9AA0A6),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-              ],
+                  if (userData?['ttUsername'] != null &&
+                      userData!['ttUsername'].toString().isNotEmpty)
+                    const Icon(
+                      Icons.open_in_new,
+                      size: 16,
+                      color: Color(0xFF0F7EDE),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
         const SizedBox(width: 10),
         // Instagram
         Expanded(
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE0E0E0)),
-            ),
-            child: Row(
-              children: [
-                Image.asset('assets/instagram.png', width: 24, height: 24),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    userData?['instUrl'] ?? 'Instagram',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF41454A),
-                      fontFamily: 'Plus Jakarta Sans',
+          child: GestureDetector(
+            onTap: () =>
+                _openSocialLink(userData?['instUsername'], 'instagram'),
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+              ),
+              child: Row(
+                children: [
+                  Image.asset(
+                    'assets/instagram.png',
+                    width: 24,
+                    height: 24,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.alternate_email,
+                        color: Color(0xFFE4405F),
+                        size: 24,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      userData?['instUsername'] != null &&
+                              userData!['instUsername'].toString().isNotEmpty
+                          ? '@${userData!['instUsername']}'
+                          : 'Instagram',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight:
+                            userData?['instUsername'] != null &&
+                                userData!['instUsername'].toString().isNotEmpty
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                        color:
+                            userData?['instUsername'] != null &&
+                                userData!['instUsername'].toString().isNotEmpty
+                            ? const Color(0xFF41454A)
+                            : const Color(0xFF9AA0A6),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-              ],
+                  if (userData?['instUsername'] != null &&
+                      userData!['instUsername'].toString().isNotEmpty)
+                    const Icon(
+                      Icons.open_in_new,
+                      size: 16,
+                      color: Color(0xFF0F7EDE),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

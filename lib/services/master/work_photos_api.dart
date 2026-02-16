@@ -81,7 +81,7 @@ class WorkPhotosApi {
 
   Future<List<WorkPhoto>> getWorkPhotos() async {
     const method = 'GET';
-    const url = '/me/master';
+    const url = '/me';
 
     ApiLogger.logRequest(method, url);
 
@@ -93,6 +93,7 @@ class WorkPhotosApi {
 
       if (masterData != null && masterData.containsKey('workPhotos')) {
         final workPhotos = masterData['workPhotos'];
+        print("ku $workPhotos");
 
         if (workPhotos is List) {
           return workPhotos

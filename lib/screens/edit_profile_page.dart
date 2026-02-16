@@ -307,8 +307,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late final TextEditingController _surnameController;
   late final TextEditingController _patronymicController;
   late final TextEditingController _phoneController;
-  late final TextEditingController _username1Controller;
-  late final TextEditingController _username2Controller;
+  late final TextEditingController _instagramController;
+  late final TextEditingController _tiktokController;
 
   // Состояние данных
   bool _isLoading = true;
@@ -318,7 +318,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   ProfileMode _selectedProfileMode = ProfileMode.client; // Выбранный режим в UI
   int? _selectedCityId;
   List<dynamic> _cities = [];
-  int ? _categoryId; // Для мастера - выбранная категория
+  int? _categoryId; // Для мастера - выбранная категория
 
   // Для аватара
   File? _avatarImage;
@@ -335,8 +335,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _surnameController = TextEditingController();
     _patronymicController = TextEditingController();
     _phoneController = TextEditingController();
-    _username1Controller = TextEditingController();
-    _username2Controller = TextEditingController();
+    _instagramController = TextEditingController();
+    _tiktokController = TextEditingController();
     _loadInitialData();
   }
 
@@ -346,8 +346,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _surnameController.dispose();
     _patronymicController.dispose();
     _phoneController.dispose();
-    _username1Controller.dispose();
-    _username2Controller.dispose();
+    _instagramController.dispose();
+    _tiktokController.dispose();
     super.dispose();
   }
 
@@ -364,6 +364,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _surnameController.text = user['lastname'] ?? '';
         _patronymicController.text = user['patronymic'] ?? '';
         _phoneController.text = user['telephone'] ?? '';
+
+        // Загружаем Instagram и TikTok
+        _instagramController.text = user['instUsername'] ?? '';
+        _tiktokController.text = user['ttUsername'] ?? '';
+
         _avatarUrl = user['avatar']; // Загружаем URL аватара
 
         _categoryId = user['category'] != null ? user['category']['id'] : null;
@@ -396,9 +401,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
     // Проверяем, изменился ли режим профиля
     final hasModeChanged = _selectedProfileMode != _currentProfileMode;
 
-    return hasBasicChanges || hasModeChanged;
-  }
+    // Проверяем, изменились ли социальные сети
+    final hasSocialChanges =
+        _selectedProfileMode == ProfileMode.master &&
+        (_instagramController.text != (_instagramController.text) ||
+            _tiktokController.text != (_tiktokController.text));
 
+    return hasBasicChanges || hasModeChanged || hasSocialChanges;
+  }
 
   // Обновление профиля
   Future<void> _updateProfile() async {
@@ -412,18 +422,36 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => _isSaving = true);
 
     try {
-      await ApiService.updateProfile(
-        firstname: _nameController.text.trim(),
-        lastname: _surnameController.text.trim(),
-        patronymic: _patronymicController.text.trim().isEmpty
-            ? null
-            : _patronymicController.text.trim(),
-        cityId: _selectedCityId!,
-        activeMode: _selectedProfileMode == ProfileMode.master
-            ? 'master'
-            : 'client',
-            categoryId: _categoryId ?? 1
-      );
+      // Для мастера передаем Instagram и TikTok
+      if (_selectedProfileMode == ProfileMode.master) {
+        await ApiService.updateProfile(
+          firstname: _nameController.text.trim(),
+          lastname: _surnameController.text.trim(),
+          patronymic: _patronymicController.text.trim().isEmpty
+              ? null
+              : _patronymicController.text.trim(),
+          cityId: _selectedCityId!,
+          activeMode: 'master',
+          categoryId: _categoryId ?? 1,
+          instUsername: _instagramController.text.trim().isEmpty
+              ? ""
+              : _instagramController.text.trim(),
+          ttUsername: _tiktokController.text.trim().isEmpty
+              ? ""
+              : _tiktokController.text.trim(),
+        );
+      } else {
+        await ApiService.updateProfile(
+          firstname: _nameController.text.trim(),
+          lastname: _surnameController.text.trim(),
+          patronymic: _patronymicController.text.trim().isEmpty
+              ? null
+              : _patronymicController.text.trim(),
+          cityId: _selectedCityId!,
+          activeMode: 'client',
+          categoryId: _categoryId ?? 1,
+        );
+      }
 
       // Обновляем текущий режим после успешного сохранения
       _currentProfileMode = _selectedProfileMode;
@@ -438,7 +466,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _navigateBackWithResult();
       }
     } catch (e) {
-      _showErrorSnackBar('Ошибка обновления профиля');
+      _showErrorSnackBar('Ошибка обновления профиля: $e');
     } finally {
       setState(() => _isSaving = false);
     }
@@ -836,15 +864,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
         ),
         actions: [
-         
-            IconButton(
-              onPressed: () async {
-                await AuthService.clearAuthData();
-                if (mounted)
-                  Navigator.pushReplacementNamed(context, '/registration');
-              },
-              icon: Image.asset('assets/logout.png', width: 22, height: 22),
-            ),
+          IconButton(
+            onPressed: () async {
+              await AuthService.clearAuthData();
+              if (mounted)
+                Navigator.pushReplacementNamed(context, '/registration');
+            },
+            icon: Image.asset('assets/logout.png', width: 22, height: 22),
+          ),
         ],
       ),
       body: Stack(
@@ -883,11 +910,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Выбор города (только для клиентов в текущем режиме)
-                if (displayMode == ProfileMode.client) ...[
-                  _buildCityDropdown(),
-                  const SizedBox(height: 32),
-                ],
+                // Выбор города (всегда показываем для обоих режимов)
+                _buildCityDropdown(),
+                const SizedBox(height: 32),
 
                 // Контактная информация
                 _buildSectionHeader('Контактная информация'),
@@ -896,18 +921,173 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 _buildPhoneField(),
                 const SizedBox(height: 12),
 
-                // Социальные сети (только для мастера в текущем режиме)
+                // Социальные сети (показываем для обоих режимов, но с подсказкой для мастера)
+                // Социальные сети (показываем для мастера)
                 if (displayMode == ProfileMode.master) ...[
-                  _buildInputField(
-                    'Instagram',
-                    _username1Controller,
-                    Icons.alternate_email_outlined,
+                  _buildSectionHeader('Социальные сети'),
+                  const SizedBox(height: 16),
+
+                  // Instagram с иконкой и цветом
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE8E8E8)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _instagramController,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF1D2125),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Instagram',
+                        hintStyle: const TextStyle(color: Color(0xFF8A8D90)),
+                        prefixIcon: Container(
+                          margin: const EdgeInsets.all(12),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/instagram.png',
+                                width: 24,
+                                height: 24,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.alternate_email,
+                                    color: Color(0xFFE4405F),
+                                    size: 24,
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                          ),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        suffixIcon: _instagramController.text.isNotEmpty
+                            ? _buildClearButton(
+                                () => setState(
+                                  () => _instagramController.clear(),
+                                ),
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 18,
+                        ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  _buildInputField(
-                    'TikTok',
-                    _username2Controller,
-                    Icons.alternate_email_outlined,
+
+                  // TikTok с иконкой и цветом
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE8E8E8)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _tiktokController,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF1D2125),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'TikTok',
+                        hintStyle: const TextStyle(color: Color(0xFF8A8D90)),
+                        prefixIcon: Container(
+                          margin: const EdgeInsets.all(12),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/tiktok.png',
+                                width: 24,
+                                height: 24,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.music_note,
+                                    color: Color(0xFF000000),
+                                    size: 24,
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                          ),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        suffixIcon: _tiktokController.text.isNotEmpty
+                            ? _buildClearButton(
+                                () => setState(() => _tiktokController.clear()),
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 18,
+                        ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Подсказка по формату
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Color(0xFF0F7EDE),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Вводите имя пользователя без @',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF5F6368),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 32),
                 ],
@@ -983,7 +1163,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return Center(
       child: Stack(
         children: [
-          // Аватар (код без изменений)
+          // Аватар
           Container(
             width: 120,
             height: 120,
@@ -1038,14 +1218,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
           ),
 
-          // Кнопка добавления/изменения аватара - ИЗМЕНЕННЫЙ onTap
+          // Кнопка добавления/изменения аватара
           Positioned(
             bottom: 0,
             right: 0,
             child: GestureDetector(
-              onTap: _isUploadingAvatar
-                  ? null
-                  : _showImageSourceDialog, // Теперь открывает диалог
+              onTap: _isUploadingAvatar ? null : _showImageSourceDialog,
               child: Container(
                 width: 36,
                 height: 36,
@@ -1145,8 +1323,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Widget _buildInputField(
     String hint,
     TextEditingController controller,
-    IconData icon,
-  ) {
+    IconData icon, {
+    String? hintText,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1168,7 +1347,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: hintText ?? hint,
           hintStyle: const TextStyle(color: Color(0xFF8A8D90)),
           prefixIcon: Icon(icon, color: const Color(0xFF8A8D90), size: 20),
           suffixIcon: controller.text.isNotEmpty

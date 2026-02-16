@@ -111,7 +111,7 @@ class _HelpPageState extends State<HelpPage> {
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: Column(  
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Заголовок с иконкой

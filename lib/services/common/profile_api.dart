@@ -32,6 +32,8 @@ class ProfileApi {
     required int cityId,
     required String activeMode,
     required categoryId,
+    String? instUsername,
+    String? ttUsername,
   }) async {
     const method = 'PUT';
     const url = '/me';
@@ -42,7 +44,9 @@ class ProfileApi {
       'patronymic': patronymic ?? '',
       'city_id': cityId,
       'active_mode': activeMode,
-      'categoryId': categoryId
+      'categoryId': categoryId,
+      'ttUsername': ttUsername,
+      'instUsername': instUsername,
     };
 
     ApiLogger.logRequest(method, url, body: body);
@@ -84,10 +88,7 @@ class ProfileApi {
     const method = 'POST';
     const url = '/me/tel/confirm';
 
-    final body = {
-      'telephone': telephone,
-      'code': code,
-    };
+    final body = {'telephone': telephone, 'code': code};
 
     ApiLogger.logRequest(method, url, body: body);
 
