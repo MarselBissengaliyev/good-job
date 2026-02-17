@@ -4,7 +4,7 @@
 
 
     <application
-        android:label="flutter_application_1"
+        android:label="Good Job"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"

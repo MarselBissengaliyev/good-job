@@ -25,6 +25,26 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   void initState() {
     super.initState();
     _loadOrders();
+    
+    // Устанавливаем цвет системной навигации
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Возвращаем стандартные настройки при выходе
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    super.dispose();
   }
 
   Future<void> _loadOrders() async {
@@ -1389,391 +1409,416 @@ void _showEditOrderDialog(BuildContext context, dynamic order) {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Color(0xFF41454A),
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Мои заказы',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _loadOrders,
-            icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-            
-            ),
-          ),
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: Column(
-        children: [
-          if (_filterStatus != 'all' || _searchQuery.isNotEmpty)
-            Container(
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset: false, // Предотвращает сжатие при открытии клавиатуры
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xFF41454A),
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Мои заказы',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: _loadOrders,
+              icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(60),
+            child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          if (_filterStatus != 'all')
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F7EDE).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    _filterStatus == 'active'
-                                        ? 'Активные'
-                                        : 'Неактивные',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF0F7EDE),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _filterStatus = 'all';
-                                      });
-                                    },
-                                    child: const Icon(
-                                      Icons.close,
-                                      size: 14,
-                                      color: Color(0xFF0F7EDE),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (_searchQuery.isNotEmpty && _filterStatus != 'all')
-                            const SizedBox(width: 8),
-                          if (_searchQuery.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F7EDE).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Поиск: "$_searchQuery"',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF0F7EDE),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _searchQuery = '';
-                                      });
-                                    },
-                                    child: const Icon(
-                                      Icons.close,
-                                      size: 14,
-                                      color: Color(0xFF0F7EDE),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  Text(
-                    '${_filteredOrders.length} из ${_orders.length}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF9E9E9E),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
+              
               ),
             ),
-          const SizedBox(height: 8),
-          if (_isLoading)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          ),
+        ),
+        body: Column(
+          children: [
+            if (_filterStatus != 'all' || _searchQuery.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
                   children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 1500),
-                      curve: Curves.easeInOut,
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: 1.0 + (value * 0.1).clamp(0.9, 1.1),
-                          child: const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Color(0xFF0F7EDE),
-                            ),
-                            strokeWidth: 3,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Загрузка ваших заказов...',
-                      style: TextStyle(
-                        color: Color(0xFF5F6368),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            if (_filterStatus != 'all')
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _filterStatus == 'active'
+                                          ? 'Активные'
+                                          : 'Неактивные',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF0F7EDE),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _filterStatus = 'all';
+                                        });
+                                      },
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 14,
+                                        color: Color(0xFF0F7EDE),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (_searchQuery.isNotEmpty && _filterStatus != 'all')
+                              const SizedBox(width: 8),
+                            if (_searchQuery.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Поиск: "$_searchQuery"',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF0F7EDE),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 14,
+                                        color: Color(0xFF0F7EDE),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Это займет всего несколько секунд',
-                      style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (_hasError)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Color(0xFFF44336),
-                      size: 64,
-                    ),
-                    const SizedBox(height: 16),
                     Text(
-                      _errorMessage,
+                      '${_filteredOrders.length} из ${_orders.length}',
                       style: const TextStyle(
-                        color: Color(0xFF41454A),
-                        fontSize: 16,
+                        fontSize: 12,
+                        color: Color(0xFF9E9E9E),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _loadOrders,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F7EDE),
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('Повторить'),
                     ),
                   ],
                 ),
               ),
-            )
-          else if (_filteredOrders.isEmpty)
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
+            const SizedBox(height: 8),
+            if (_isLoading)
+              Expanded(
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.8, end: 1.0),
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeOutBack,
-                        builder: (context, scale, child) {
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 1500),
+                        curve: Curves.easeInOut,
+                        builder: (context, value, child) {
                           return Transform.scale(
-                            scale: scale,
-                            child: Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F7EDE).withOpacity(0.1),
-                                shape: BoxShape.circle,
+                            scale: 1.0 + (value * 0.1).clamp(0.9, 1.1),
+                            child: const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF0F7EDE),
                               ),
-                              child: const Icon(
-                                Icons.shopping_bag_outlined,
-                                size: 60,
-                                color: Color(0xFF0F7EDE),
-                              ),
+                              strokeWidth: 3,
                             ),
                           );
                         },
                       ),
-                      const SizedBox(height: 24),
-                      Text(
-                        _searchQuery.isNotEmpty || _filterStatus != 'all'
-                            ? 'Ничего не найдено'
-                            : 'У вас пока нет заказов',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Загрузка ваших заказов...',
+                        style: TextStyle(
+                          color: Color(0xFF5F6368),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Text(
-                          _searchQuery.isNotEmpty || _filterStatus != 'all'
-                              ? 'Попробуйте изменить параметры поиска'
-                              : 'Создайте свой первый заказ и начните получать предложения от мастеров',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: const Color(0xFF9E9E9E),
-                            fontFamily: 'Plus Jakarta Sans',
-                            height: 1.4,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Это займет всего несколько секунд',
+                        style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
                       ),
-                      if (_searchQuery.isNotEmpty || _filterStatus != 'all')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _searchQuery = '';
-                                _filterStatus = 'all';
-                              });
-                            },
-                            child: const Text('Сбросить фильтры'),
-                          ),
-                        ),
                     ],
                   ),
                 ),
-              ),
-            )
-          else
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadOrders,
-                color: const Color(0xFF0F7EDE),
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  itemCount: _filteredOrders.length,
-                  itemBuilder: (context, index) {
-                    final order = _filteredOrders[index];
-                    return TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: Duration(milliseconds: 300 + (index * 50)),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Opacity(
-                          opacity: value,
-                          child: Transform.translate(
-                            offset: Offset(0, 20 * (1 - value)),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: _buildOrderItem(order),
-                    );
-                  },
-                ),
-              ),
-            ),
-          if (!_isLoading && !_hasError)
-            Container(
-              color: Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                child: ElevatedButton(
-                  onPressed: _addNewOrder,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F7EDE),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(
-                        color: Color(0xFF0F7EDE),
-                        width: 1,
-                      ),
-                    ),
-                    minimumSize: const Size(double.infinity, 50),
-                    padding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                  child: Row(
+              )
+            else if (_hasError)
+              Expanded(
+                child: Center(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        _orders.isEmpty ? Icons.add_circle_outline : Icons.add,
-                        size: 20,
+                      const Icon(
+                        Icons.error_outline,
+                        color: Color(0xFFF44336),
+                        size: 64,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 16),
                       Text(
-                        _orders.isEmpty
-                            ? 'Создать первый заказ'
-                            : 'Добавить заказ',
+                        _errorMessage,
                         style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Plus Jakarta Sans',
+                          color: Color(0xFF41454A),
+                          fontSize: 16,
                         ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _loadOrders,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0F7EDE),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Повторить'),
                       ),
                     ],
                   ),
                 ),
+              )
+            else if (_filteredOrders.isEmpty)
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.8, end: 1.0),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutBack,
+                          builder: (context, scale, child) {
+                            return Transform.scale(
+                              scale: scale,
+                              child: Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 60,
+                                  color: Color(0xFF0F7EDE),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          _searchQuery.isNotEmpty || _filterStatus != 'all'
+                              ? 'Ничего не найдено'
+                              : 'У вас пока нет заказов',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            _searchQuery.isNotEmpty || _filterStatus != 'all'
+                                ? 'Попробуйте изменить параметры поиска'
+                                : 'Создайте свой первый заказ и начните получать предложения от мастеров',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: const Color(0xFF9E9E9E),
+                              fontFamily: 'Plus Jakarta Sans',
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        if (_searchQuery.isNotEmpty || _filterStatus != 'all')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _searchQuery = '';
+                                  _filterStatus = 'all';
+                                });
+                              },
+                              child: const Text('Сбросить фильтры'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _loadOrders,
+                  color: const Color(0xFF0F7EDE),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    itemCount: _filteredOrders.length,
+                    itemBuilder: (context, index) {
+                      final order = _filteredOrders[index];
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 300 + (index * 50)),
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) {
+                          return Opacity(
+                            opacity: value,
+                            child: Transform.translate(
+                              offset: Offset(0, 20 * (1 - value)),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: _buildOrderItem(order),
+                      );
+                    },
+                  ),
+                ),
               ),
+            if (!_isLoading && !_hasError)
+              Container(
+                color: Colors.transparent,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  child: ElevatedButton(
+                    onPressed: _addNewOrder,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F7EDE),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(
+                          color: Color(0xFF0F7EDE),
+                          width: 1,
+                        ),
+                      ),
+                      minimumSize: const Size(double.infinity, 50),
+                      padding: const EdgeInsets.symmetric(vertical: 0),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _orders.isEmpty ? Icons.add_circle_outline : Icons.add,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _orders.isEmpty
+                              ? 'Создать первый заказ'
+                              : 'Добавить заказ',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false, // SafeArea только снизу
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
             ),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.orders,
-        accountType: AccountType.client,
+            child: CustomBottomNavBar(
+              activeItem: NavItem.orders,
+              accountType: AccountType.client,
+            ),
+          ),
+        ),
       ),
     );
   }
