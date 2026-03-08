@@ -1,15 +1,17 @@
-import 'dart:io';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/models/work-photo.dart';
 import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
 import 'package:flutter_application_1/screens/edit_profile_page.dart';
 import 'package:flutter_application_1/screens/help_page.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../services/api_service.dart';
 import '../services/auth/auth_service.dart';
 import 'my_orders_client_page.dart';
-import 'package:url_launcher/url_launcher.dart'; // Добавьте в начало файла
 
 enum AccountType { client, master }
 
@@ -26,9 +28,9 @@ class _AccountPageState extends State<AccountPage> {
   Map<String, dynamic>? userData;
   bool isLoading = true;
   bool isLoadingWorks = false;
-  List<WorkPhoto> portfolioImages = []; // Для мастеров - реальные работы
-  String? selectedCategory; // Для мастеров
-  dynamic _activeMode; // Храним режим пользователя
+  List<WorkPhoto> portfolioImages = [];
+  String? selectedCategory;
+  dynamic _activeMode;
   List<dynamic> categories = [];
   bool isLoadingCategories = false;
 
@@ -36,6 +38,24 @@ class _AccountPageState extends State<AccountPage> {
   void initState() {
     super.initState();
     _loadUserProfile();
+
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    super.dispose();
   }
 
   Future<void> _launchUrl(String url) async {
@@ -56,17 +76,13 @@ class _AccountPageState extends State<AccountPage> {
     }
 
     String url;
+    final cleanUsername = username.replaceAll('@', '');
 
-    // Формируем URL в зависимости от платформы
     switch (platform) {
       case 'instagram':
-        // Очищаем username от @ если есть
-        final cleanUsername = username.replaceAll('@', '');
-        // Пробуем открыть в приложении, если не получается - в браузере
         url = 'https://instagram.com/$cleanUsername';
         break;
       case 'tiktok':
-        final cleanUsername = username.replaceAll('@', '');
         url = 'https://tiktok.com/@$cleanUsername';
         break;
       default:
@@ -84,9 +100,7 @@ class _AccountPageState extends State<AccountPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError
-            ? const Color(0xFFE53935)
-            : const Color(0xFF0F7EDE),
+        backgroundColor: isError ? const Color(0xFFE53935) : const Color(0xFF0F7EDE),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 2),
@@ -115,17 +129,11 @@ class _AccountPageState extends State<AccountPage> {
             _activeMode = activeValue;
           }
 
-          // Синхронизируем selectedCategory с загруженными данными
-          if (userData?['category'] != null) {
-            selectedCategory = userData!['category']['name'];
-          }
-
           print('Загружены данные пользователя: $userData');
           print('Active mode: $_activeMode');
+          print('Категории мастера: ${userData?['categories']}');
 
-          // Если пользователь мастер - загружаем категории и работы
           if (_isMaster) {
-            _loadCategories();
             _loadMasterWorks();
           }
 
@@ -135,9 +143,9 @@ class _AccountPageState extends State<AccountPage> {
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Ошибка загрузки профиля: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка загрузки профиля: $e')),
+        );
       }
     }
   }
@@ -164,119 +172,104 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 
-  Future<void> _loadCategories() async {
-    if (!mounted) return;
-
-    try {
-      setState(() => isLoadingCategories = true);
-
-      final categoriesData = await ApiService.getCategories();
-
-      if (mounted) {
-        setState(() {
-          categories = categoriesData;
-          isLoadingCategories = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => isLoadingCategories = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки категорий: $e')),
-        );
-      }
-    }
-  }
-
-Future<void> _updateUserCategory(int categoryId) async {
-  try {
-    setState(() => isLoading = true);
-
-    // Отправляем запрос на обновление категории
-    final response = await ApiService.updateUserCategory(categoryId);
-
-    if (mounted) {
-      // После успешного обновления, загружаем полный профиль заново
-      // чтобы получить актуальные данные включая категорию
-      final profileResponse = await ApiService.getProfile();
-      
-      if (mounted) {
-        setState(() {
-          // Обновляем userData полными данными из профиля
-          userData = profileResponse['data'];
-          
-          // Обновляем selectedCategory
-          if (userData?['category'] != null) {
-            selectedCategory = userData!['category']['name'];
-          } else {
-            selectedCategory = null;
-          }
-          
-          isLoading = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Категория успешно обновлена')),
-        );
-        
-        print('✅ Категория обновлена: ${userData?['category']?['name']}');
-      }
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка обновления категории: $e')),
-      );
-    }
-  }
-}
   bool get _isMaster => _activeMode == 'master';
 
-  // Метод для определения типа аккаунта для bottom navigation
   AccountType? get _accountTypeForNavBar {
-    if (_activeMode == null) return null; // Еще загружается
+    if (_activeMode == null) return null;
     if (_activeMode == 'master') return AccountType.master;
     return AccountType.client;
   }
 
+  void _navigateToEditProfile() {
+    ProfileMode mode = _isMaster ? ProfileMode.master : ProfileMode.client;
+
+    print('Навигация на EditProfilePage с режимом: $mode');
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => EditProfilePage(initialMode: mode)),
+    ).then((result) {
+      if (mounted) {
+        _loadUserProfile();
+        if (_isMaster) {
+          _loadMasterWorks();
+        }
+      }
+    });
+  }
+
+  void _openEditPortfolioPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EditPortfolioMasterPage()),
+    ).then((_) {
+      if (mounted) {
+        _loadMasterWorks();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        title: const Text(
-          'Аккаунт',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () async {
-              await AuthService.clearAuthData();
-              if (mounted)
-                Navigator.pushReplacementNamed(context, '/registration');
-            },
-            icon: Image.asset('assets/logout.png', width: 22, height: 22),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: isLoading
-          ? _buildLoadingState()
-          : (_isMaster ? _buildMasterContent() : _buildClientContent()),
-      bottomNavigationBar: _accountTypeForNavBar == null
-          ? null // Пока не определился тип аккаунта, не показываем навигацию
-          : CustomBottomNavBar(
-              activeItem: NavItem.account,
-              accountType: _accountTypeForNavBar!,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          title: const Text(
+            'Аккаунт',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1D2125),
+              fontFamily: 'Plus Jakarta Sans',
             ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: () async {
+                await AuthService.clearAuthData();
+                if (mounted) Navigator.pushReplacementNamed(context, '/registration');
+              },
+              icon: Image.asset('assets/logout.png', width: 22, height: 22),
+            ),
+          ],
+        ),
+        body: isLoading
+            ? _buildLoadingState()
+            : (_isMaster ? _buildMasterContent() : _buildClientContent()),
+        bottomNavigationBar: _accountTypeForNavBar == null
+            ? null
+            : SafeArea(
+                top: false,
+                minimum: const EdgeInsets.only(bottom: 0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFAFAFA),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 12,
+                        offset: const Offset(0, -4),
+                        spreadRadius: -2,
+                      ),
+                    ],
+                  ),
+                  child: CustomBottomNavBar(
+                    activeItem: NavItem.account,
+                    accountType: _accountTypeForNavBar!,
+                  ),
+                ),
+              ),
+      ),
     );
   }
 
@@ -326,8 +319,8 @@ Future<void> _updateUserCategory(int categoryId) async {
                       lastName,
                       style: const TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF41454A),
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                       textAlign: TextAlign.center,
@@ -344,13 +337,20 @@ Future<void> _updateUserCategory(int categoryId) async {
                         textAlign: TextAlign.center,
                       ),
                     const SizedBox(height: 8),
-                    Text(
-                      phone,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F4FF),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        phone,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF0F7EDE),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
                       ),
                     ),
                   ],
@@ -362,9 +362,7 @@ Future<void> _updateUserCategory(int categoryId) async {
                 title: 'Мои заказы',
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const MyOrdersClientPage(),
-                  ),
+                  MaterialPageRoute(builder: (context) => const MyOrdersClientPage()),
                 ),
               ),
               const SizedBox(height: 12),
@@ -398,7 +396,7 @@ Future<void> _updateUserCategory(int categoryId) async {
         await _loadMasterWorks();
       },
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
@@ -413,40 +411,48 @@ Future<void> _updateUserCategory(int categoryId) async {
                       lastName,
                       style: const TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF41454A),
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       '$firstName $patronymic'.trim(),
                       style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF41454A),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      phone,
-                      style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: FontWeight.w400,
                         color: Color(0xFF5F6368),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    _buildCategorySelector(),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F4FF),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        phone,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF0F7EDE),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
-              _buildSocialLinks(),
               const SizedBox(height: 24),
+              _buildCategorySelector(),
+              const SizedBox(height: 20),
+              _buildSocialLinks(),
+              const SizedBox(height: 20),
               _buildSubscriptionBlock(),
-              const SizedBox(height: 34),
+              const SizedBox(height: 24),
               _buildMyWorksSection(),
               const SizedBox(height: 80),
             ],
@@ -457,28 +463,37 @@ Future<void> _updateUserCategory(int categoryId) async {
   }
 
   Widget _buildAvatar({required bool isMaster}) {
-    // Получаем URL аватара из userData
     String? avatarUrl = userData?['avatar'];
-
-    String displayLetter = '?';
+    String displayLetter = userData?['firstname']?.isNotEmpty == true
+        ? userData!['firstname'][0].toUpperCase()
+        : '?';
 
     return Stack(
       children: [
         Container(
-          width: 96,
-          height: 96,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF96C5EB),
-            border: Border.all(color: const Color(0xFF0F7EDE), width: 2),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF96C5EB), Color(0xFF0F7EDE)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F7EDE).withOpacity(0.2),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          child: avatarUrl != null && avatarUrl.isNotEmpty
-              ? ClipOval(
-                  child: Image.network(
+          child: ClipOval(
+            child: avatarUrl != null && avatarUrl.isNotEmpty
+                ? Image.network(
                     'http://gj-back.checkedout.kz/storage/$avatarUrl',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      // При ошибке загрузки показываем букву
                       return Center(
                         child: Text(
                           displayLetter,
@@ -491,59 +506,43 @@ Future<void> _updateUserCategory(int categoryId) async {
                         ),
                       );
                     },
-                  ),
-                )
-              : Center(
-                  child: Text(
-                    displayLetter,
-                    style: const TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
-                      fontFamily: 'Plus Jakarta Sans',
+                  )
+                : Center(
+                    child: Text(
+                      displayLetter,
+                      style: const TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
                     ),
                   ),
-                ),
+          ),
         ),
         Positioned(
           bottom: 0,
           right: 0,
           child: GestureDetector(
-            onTap: () =>
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditProfilePage(
-                      initialMode: isMaster
-                          ? ProfileMode.master
-                          : ProfileMode.client,
-                    ),
-                  ),
-                ).then((_) {
-                  if (mounted) _loadUserProfile();
-                }),
+            onTap: _navigateToEditProfile,
             child: Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: const Color(0xFF0F7EDE),
                 shape: BoxShape.circle,
-                boxShadow: isMaster
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 6,
-                        ),
-                      ]
-                    : null,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 6,
+                  ),
+                ],
               ),
-              child: Center(
-                child: Image.asset(
-                  'assets/edit.png',
-                  width: 18,
-                  height: 18,
-                  color: Colors.white,
-                ),
+              child: const Icon(
+                Icons.edit,
+                color: Colors.white,
+                size: 16,
               ),
             ),
           ),
@@ -552,426 +551,638 @@ Future<void> _updateUserCategory(int categoryId) async {
     );
   }
 
-void _showCategoryBottomSheet(BuildContext context) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    isScrollControlled: true,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Container(
-            padding: const EdgeInsets.all(24),
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
+  Widget _buildCategorySelector() {
+    final categoriesList = userData?['categories'] as List?;
+    final hasCategories = categoriesList != null && categoriesList.isNotEmpty;
+
+    if (!hasCategories) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE8E8E8)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Выберите категорию',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF41454A),
-                    fontFamily: 'Plus Jakarta Sans',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Список категорий
-                Expanded(
-                  child: isLoadingCategories
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Color(0xFF0F7EDE),
-                            ),
-                          ),
-                        )
-                      : categories.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Категории не найдены',
-                            style: TextStyle(
-                              color: Color(0xFF9AA0A6),
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: categories.length,
-                          itemBuilder: (context, index) {
-                            final category = categories[index];
-                            // Используем актуальные данные из userData
-                            final isSelected =
-                                userData?['category']?['id'] == category['id'];
-
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () async {
-                                  // Сначала закрываем bottom sheet
-                                  Navigator.pop(context);
-                                  // Затем обновляем категорию
-                                  await _updateUserCategory(category['id']);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: Colors.grey.shade200,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          category['name'] ?? 'Без названия',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w600
-                                                : FontWeight.w400,
-                                            color: isSelected
-                                                ? const Color(0xFF0F7EDE)
-                                                : const Color(0xFF41454A),
-                                            fontFamily: 'Plus Jakarta Sans',
-                                          ),
-                                        ),
-                                      ),
-                                      if (isSelected)
-                                        const Icon(
-                                          Icons.check,
-                                          color: Color(0xFF0F7EDE),
-                                          size: 20,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-
-                // Кнопка закрытия
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF5F5F5),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Закрыть',
-                      style: TextStyle(
-                        color: Color(0xFF41454A),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-Widget _buildCategorySelector() {
-  // Получаем название категории напрямую из userData
-  String categoryName = 'Выберите категорию';
-
-  if (userData?['category'] != null) {
-    categoryName = userData!['category']['name'] ?? 'Выберите категорию';
-  }
-
-  return GestureDetector(
-    onTap: () => _showCategoryBottomSheet(context),
-    child: Container(
-      width: double.infinity,
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Row(
-        children: [
-          Image.asset('assets/handyman.png', width: 24, height: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              categoryName,
-              style: const TextStyle(
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Мои категории',
+              style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF41454A),
                 fontFamily: 'Plus Jakarta Sans',
               ),
             ),
+            const SizedBox(height: 16),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _navigateToEditProfile,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F9FF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF0F7EDE).withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.category_outlined,
+                          color: Color(0xFF0F7EDE),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Добавить категории',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1D2125),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Выберите категории услуг',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF8A8D90),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: Color(0xFF0F7EDE),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-          const Icon(Icons.keyboard_arrow_down, color: Color(0xFF9AA0A6)),
         ],
       ),
-    ),
-  );
-}
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Мои категории',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF41454A),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F4FF),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${categoriesList.length}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0F7EDE),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: categoriesList.map((category) {
+              final colors = [
+                const Color(0xFFE3F2FD),
+                const Color(0xFFE8F5E9),
+                const Color(0xFFFFF3E0),
+                const Color(0xFFF3E5F5),
+                const Color(0xFFFFEBEE),
+                const Color(0xFFE0F2F1),
+              ];
+              final colorIndex = (category['name']?.hashCode ?? 0).abs() % colors.length;
+              final bgColor = colors[colorIndex];
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: bgColor.withOpacity(0.5)),
+                ),
+                child: Text(
+                  category['name'] ?? 'Категория',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: bgColor.computeLuminance() > 0.5
+                        ? const Color(0xFF1D2125)
+                        : Colors.white,
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _navigateToEditProfile,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFE8E8E8)),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0F7EDE)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Редактировать категории',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0F7EDE),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSocialLinks() {
-    return Row(
-      children: [
-        // TikTok
-        Expanded(
-          child: GestureDetector(
-            onTap: () => _openSocialLink(userData?['ttUsername'], 'tiktok'),
-            child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE0E0E0)),
-              ),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/tiktok.png',
-                    width: 24,
-                    height: 24,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.music_note,
-                        color: Colors.black,
-                        size: 24,
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      userData?['ttUsername'] != null &&
-                              userData!['ttUsername'].toString().isNotEmpty
-                          ? '@${userData!['ttUsername']}'
-                          : 'TikTok',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            userData?['ttUsername'] != null &&
-                                userData!['ttUsername'].toString().isNotEmpty
-                            ? FontWeight.w500
-                            : FontWeight.w400,
-                        color:
-                            userData?['ttUsername'] != null &&
-                                userData!['ttUsername'].toString().isNotEmpty
-                            ? const Color(0xFF41454A)
-                            : const Color(0xFF9AA0A6),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (userData?['ttUsername'] != null &&
-                      userData!['ttUsername'].toString().isNotEmpty)
-                    const Icon(
-                      Icons.open_in_new,
-                      size: 16,
-                      color: Color(0xFF0F7EDE),
-                    ),
-                ],
+    final hasTikTok = userData?['ttUsername'] != null &&
+        userData!['ttUsername'].toString().isNotEmpty;
+    final hasInstagram = userData?['instUsername'] != null &&
+        userData!['instUsername'].toString().isNotEmpty;
+
+    if (!hasTikTok && !hasInstagram) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE8E8E8)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Социальные сети',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF41454A),
+                fontFamily: 'Plus Jakarta Sans',
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        // Instagram
-        Expanded(
-          child: GestureDetector(
-            onTap: () =>
-                _openSocialLink(userData?['instUsername'], 'instagram'),
-            child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE0E0E0)),
-              ),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/instagram.png',
-                    width: 24,
-                    height: 24,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.alternate_email,
-                        color: Color(0xFFE4405F),
-                        size: 24,
-                      );
-                    },
+            const SizedBox(height: 16),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _navigateToEditProfile,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F9FF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF0F7EDE).withOpacity(0.2),
+                      width: 1.5,
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      userData?['instUsername'] != null &&
-                              userData!['instUsername'].toString().isNotEmpty
-                          ? '@${userData!['instUsername']}'
-                          : 'Instagram',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            userData?['instUsername'] != null &&
-                                userData!['instUsername'].toString().isNotEmpty
-                            ? FontWeight.w500
-                            : FontWeight.w400,
-                        color:
-                            userData?['instUsername'] != null &&
-                                userData!['instUsername'].toString().isNotEmpty
-                            ? const Color(0xFF41454A)
-                            : const Color(0xFF9AA0A6),
-                        fontFamily: 'Plus Jakarta Sans',
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F7EDE).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.alternate_email,
+                          color: Color(0xFF0F7EDE),
+                          size: 24,
+                        ),
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Добавить соцсети',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1D2125),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Instagram и TikTok',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF8A8D90),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: Color(0xFF0F7EDE),
+                        ),
+                      ),
+                    ],
                   ),
-                  if (userData?['instUsername'] != null &&
-                      userData!['instUsername'].toString().isNotEmpty)
-                    const Icon(
-                      Icons.open_in_new,
-                      size: 16,
-                      color: Color(0xFF0F7EDE),
-                    ),
-                ],
+                ),
               ),
             ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Социальные сети',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildSocialButton(
+                icon: 'assets/tiktok.png',
+                username: userData?['ttUsername'],
+                platform: 'tiktok',
+                color: Colors.black,
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _buildSocialButton(
+                icon: 'assets/instagram.png',
+                username: userData?['instUsername'],
+                platform: 'instagram',
+                color: const Color(0xFFE4405F),
+              )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSocialButton({
+    required String icon,
+    required String? username,
+    required String platform,
+    required Color color,
+  }) {
+    final hasUsername = username != null && username.isNotEmpty;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: hasUsername ? () => _openSocialLink(username, platform) : _navigateToEditProfile,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: hasUsername ? Colors.white : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasUsername ? color.withOpacity(0.3) : const Color(0xFFE8E8E8),
+            ),
+          ),
+          child: Column(
+            children: [
+              Image.asset(
+                icon,
+                width: 32,
+                height: 32,
+                color: hasUsername ? null : Colors.grey,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    platform == 'tiktok' ? Icons.music_note : Icons.alternate_email,
+                    color: hasUsername ? color : Colors.grey,
+                    size: 32,
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasUsername
+                    ? '@${username.length > 10 ? '${username.substring(0, 10)}...' : username}'
+                    : 'Не указан',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: hasUsername ? FontWeight.w500 : FontWeight.w400,
+                  color: hasUsername ? const Color(0xFF41454A) : const Color(0xFF9AA0A6),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (hasUsername) ...[
+                const SizedBox(height: 4),
+                const Icon(Icons.open_in_new, size: 14, color: Color(0xFF0F7EDE)),
+              ],
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildSubscriptionBlock() {
-    return GestureDetector(
-      onTap: () => _showSubscribeModal(context),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F7EDE),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Купить\nподписку',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: const [
-                      Text(
-                        '4 999',
+    final subscriptions = userData?['subscriptions'] as List?;
+    final hasSubscription = subscriptions != null && subscriptions.isNotEmpty;
+
+    if (!hasSubscription) {
+      return GestureDetector(
+        onTap: () => _launchUrl(
+            'https://qr.kaspi.kz/19134627698424934147714893150004931409130'),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0F7EDE), Color(0xFF1976D2)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F7EDE).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Премиум\nподписка',
                         style: TextStyle(
-                          fontSize: 32,
+                          fontSize: 20,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
                           fontFamily: 'Plus Jakarta Sans',
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Text(
-                        'тг. / мес.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white,
-                          fontFamily: 'Plus Jakarta Sans',
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: const [
+                        Text(
+                          '2 000 ₸',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        Text(
+                          '/месяц',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white70,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(height: 1, color: const Color(0x36FFFFFF)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/check.png',
-                        width: 20,
-                        height: 20,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Публикация услуг',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/check.png',
-                        width: 20,
-                        height: 20,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Отображение номера заказчика',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              Container(height: 1, color: Colors.white.withOpacity(0.2)),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildSubscriptionFeature('Публикация услуг'),
+                    _buildSubscriptionFeature('Просмотр номеров'),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      );
+    }
+
+    final subscription = subscriptions!.first;
+    final endAt = subscription['endAt'] as String?;
+
+    String formattedDate = '';
+    if (endAt != null) {
+      try {
+        final dateTime = DateTime.parse(endAt);
+        formattedDate =
+            '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}.${dateTime.year}';
+      } catch (e) {
+        formattedDate = 'Дата не указана';
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F4FF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBBDEFB), width: 1),
       ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F7EDE),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.stars, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Подписка активна',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1565C0),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'до $formattedDate',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1565C0),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionFeature(String text) {
+    return Row(
+      children: [
+        const Icon(Icons.check_circle, color: Colors.white, size: 18),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.white,
+            fontFamily: 'Plus Jakarta Sans',
+          ),
+        ),
+      ],
     );
   }
 
@@ -986,8 +1197,8 @@ Widget _buildCategorySelector() {
               'Мои работы',
               style: TextStyle(
                 fontSize: 20,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF41454A),
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1D2125),
                 fontFamily: 'Plus Jakarta Sans',
               ),
             ),
@@ -1003,133 +1214,162 @@ Widget _buildCategorySelector() {
           ],
         ),
         const SizedBox(height: 16),
-
-        // Отображение работ в виде сетки
-        if (portfolioImages.isEmpty && !isLoadingWorks)
-          Center(
-            child: Column(
-              children: [
-                Icon(Icons.photo_library, size: 60, color: Colors.grey[300]),
-                const SizedBox(height: 12),
-                const Text(
-                  'Нет загруженных работ',
-                  style: TextStyle(color: Colors.grey, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Нажмите + чтобы добавить первую работу',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-              ],
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 3,
-              crossAxisSpacing: 3,
-              childAspectRatio: 1,
-            ),
-            itemCount: portfolioImages.length + 1, // +1 для кнопки добавления
-            itemBuilder: (context, index) {
-              const double r = 12;
-              BorderRadius radius = BorderRadius.zero;
-
-              // Определяем скругления углов
-              if (index == 0)
-                radius = const BorderRadius.only(topLeft: Radius.circular(r));
-              else if (index == 2)
-                radius = const BorderRadius.only(topRight: Radius.circular(r));
-              else if (index == 6)
-                radius = const BorderRadius.only(
-                  bottomLeft: Radius.circular(r),
-                );
-              else if (index == 8)
-                radius = const BorderRadius.only(
-                  bottomRight: Radius.circular(r),
-                );
-
-              // Кнопка добавления (последняя ячейка)
-              if (index == portfolioImages.length) {
-                return GestureDetector(
-                  onTap: () => _openEditPortfolioPage(),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0E0E0),
-                      borderRadius: radius,
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.add,
-                        size: 32,
-                        color: Color(0xFF0F7EDE),
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              // Отображение реальных работ
-              if (index < portfolioImages.length) {
-                final workPhoto = portfolioImages[index];
-                return Container(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    image: DecorationImage(
-                      image: NetworkImage(
-                        'http://gj-back.checkedout.kz/storage/${workPhoto.path}',
-                      ),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  child: Stack(
-                    children: [
-                      // Градиент для лучшей видимости (опционально)
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: radius,
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              Colors.black.withOpacity(0.3),
-                              Colors.transparent,
-                            ],
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE8E8E8)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: portfolioImages.isEmpty && !isLoadingWorks
+                ? Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.photo_library, size: 60, color: Colors.grey[300]),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Нет загруженных работ',
+                          style: TextStyle(
+                            color: Color(0xFF8A8D90),
+                            fontSize: 16,
+                            fontFamily: 'Plus Jakarta Sans',
                           ),
                         ),
-                      ),
-                      // Можно добавить иконку удаления или другую информацию
-                    ],
-                  ),
-                );
-              }
+                        const SizedBox(height: 8),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _openEditPortfolioPage,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F7EDE),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Добавить работу',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      mainAxisSpacing: 4,
+                      crossAxisSpacing: 4,
+                      childAspectRatio: 1,
+                    ),
+                    itemCount: portfolioImages.length + 1,
+                    itemBuilder: (context, index) {
+                      const double r = 12;
+                      BorderRadius radius = BorderRadius.zero;
 
-              // Пустые ячейки (если работ меньше 8)
-              return Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: radius,
-                ),
-              );
-            },
+                      if (index == 0) {
+                        radius = const BorderRadius.only(topLeft: Radius.circular(r));
+                      } else if (index == 2) {
+                        radius = const BorderRadius.only(topRight: Radius.circular(r));
+                      } else if (index == 6) {
+                        radius = const BorderRadius.only(
+                          bottomLeft: Radius.circular(r),
+                        );
+                      } else if (index == 8) {
+                        radius = const BorderRadius.only(
+                          bottomRight: Radius.circular(r),
+                        );
+                      }
+
+                      if (index == portfolioImages.length) {
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _openEditPortfolioPage,
+                            borderRadius: radius,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F5F5),
+                                borderRadius: radius,
+                                border: Border.all(
+                                  color: const Color(0xFFE0E0E0),
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add, size: 32, color: Color(0xFF0F7EDE)),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Добавить',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF0F7EDE),
+                                      fontFamily: 'Plus Jakarta Sans',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      if (index < portfolioImages.length) {
+                        final workPhoto = portfolioImages[index];
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _openEditPortfolioPage,
+                            borderRadius: radius,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: radius,
+                                image: DecorationImage(
+                                  image: NetworkImage(
+                                    'http://gj-back.checkedout.kz/storage/${workPhoto.path}',
+                                  ),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: radius,
+                        ),
+                      );
+                    },
+                  ),
           ),
+        ),
       ],
     );
-  }
-
-  void _openEditPortfolioPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EditPortfolioMasterPage()),
-    ).then((_) {
-      // Обновляем список работ после возвращения со страницы редактирования
-      if (mounted) {
-        _loadMasterWorks();
-      }
-    });
   }
 
   Widget _buildMenuButton({
@@ -1137,66 +1377,63 @@ Widget _buildCategorySelector() {
     required String title,
     required VoidCallback onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(13),
-            child: Row(
-              children: [
-                // Для иконки help используем Icons.help_outline
-                if (icon == 'assets/help.png')
-                  const Icon(
-                    Icons.help_outline,
-                    color: Color(0xFF41454A),
-                    size: 24,
-                  )
-                else
-                  Image.asset(
-                    icon,
-                    width: 24,
-                    height: 24,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.help_outline,
-                        color: Color(0xFF41454A),
-                        size: 24,
-                      );
-                    },
-                  ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 17,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE8E8E8)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              if (icon == 'assets/help.png')
+                const Icon(Icons.help_outline, color: Color(0xFF41454A), size: 24)
+              else
+                Image.asset(
+                  icon,
+                  width: 24,
+                  height: 24,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.help_outline,
                       color: Color(0xFF41454A),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
+                      size: 24,
+                    );
+                  },
+                ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF41454A),
+                    fontFamily: 'Plus Jakarta Sans',
                   ),
                 ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 20,
-                  color: Color(0xFF9AA0A6),
-                ),
-              ],
-            ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF9AA0A6)),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // Методы для модального окна подписки
   void _showSubscribeModal(BuildContext context) {
     bool isSent = false;
 
@@ -1213,7 +1450,7 @@ Widget _buildCategorySelector() {
                 insetPadding: const EdgeInsets.symmetric(horizontal: 14),
                 backgroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(24),
@@ -1225,9 +1462,9 @@ Widget _buildCategorySelector() {
                           'Подтвердите\nзапрос на оплату',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF41454A),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1D2125),
                             fontFamily: 'Plus Jakarta Sans',
                           ),
                         ),
@@ -1235,8 +1472,8 @@ Widget _buildCategorySelector() {
                         _buildTextField('Почта', TextInputType.emailAddress),
                         const SizedBox(height: 16),
                         _buildTextField('Номер', TextInputType.phone),
-                        const SizedBox(height: 32),
-                        _buildButton(
+                        const SizedBox(height: 24),
+                        _buildDialogButton(
                           text: 'Отправить',
                           onTap: () => setState(() => isSent = true),
                         ),
@@ -1245,21 +1482,27 @@ Widget _buildCategorySelector() {
                           'Запрос отправлен',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF41454A),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1D2125),
                             fontFamily: 'Plus Jakarta Sans',
                           ),
                         ),
-                        const SizedBox(height: 32),
-                        Image.asset(
-                          'assets/check.png',
-                          width: 80,
-                          height: 80,
-                          color: const Color(0xFF1DCE6A),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Color(0xFF4CAF50),
+                            size: 48,
+                          ),
                         ),
-                        const SizedBox(height: 32),
-                        _buildButton(
+                        const SizedBox(height: 24),
+                        _buildDialogButton(
                           text: 'На главную',
                           onTap: () => Navigator.pop(context),
                         ),
@@ -1297,24 +1540,28 @@ Widget _buildCategorySelector() {
     );
   }
 
-  Widget _buildButton({required String text, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 56,
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F7EDE),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Center(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-              fontFamily: 'Plus Jakarta Sans',
+  Widget _buildDialogButton({required String text, required VoidCallback onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F7EDE),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                fontFamily: 'Plus Jakarta Sans',
+              ),
             ),
           ),
         ),

@@ -1,8 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+
 import '../services/api_service.dart';
-import '../services/auth/auth_service.dart';
 import 'registration_4_page.dart';
 import 'registration_page.dart';
 
@@ -19,6 +18,13 @@ class _LoginPageState extends State<LoginPage> {
   String? _errorMessage;
   bool _phoneHasError = false;
   Map<String, dynamic>? _fieldErrors;
+
+  // Создаем форматтер маски для телефона
+  final maskFormatter = MaskTextInputFormatter(
+    mask: '+7 (###) ###-##-##',
+    filter: {"#": RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
 
   // Получить сообщение об ошибке для конкретного поля
   String? _getFieldError(String fieldName) {
@@ -63,10 +69,34 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  // Функция для очистки номера телефона от всех символов кроме цифр
+  String _getCleanPhoneNumber() {
+    String maskedNumber = _phoneController.text;
+    // Удаляем все нецифровые символы
+    String cleanNumber = maskedNumber.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Если номер начинается с 8 (российский формат), заменяем на +7
+    if (cleanNumber.startsWith('8') && cleanNumber.length == 11) {
+      cleanNumber = '7${cleanNumber.substring(1)}';
+    }
+
+    // Добавляем + в начало, если его нет
+    if (!cleanNumber.startsWith('7')) {
+      cleanNumber = '7$cleanNumber';
+    }
+
+    return '+$cleanNumber';
+  }
+
   Future<void> _login() async {
-    if (_phoneController.text.isEmpty) {
+    // Получаем очищенный номер телефона
+    String cleanPhone = _getCleanPhoneNumber();
+
+    // Проверяем, что номер содержит достаточно цифр
+    if (cleanPhone.length < 12) {
+      // +7 и 10 цифр = 12 символов
       setState(() {
-        _errorMessage = 'Введите номер телефона';
+        _errorMessage = 'Введите корректный номер телефона';
         _phoneHasError = true;
       });
       return;
@@ -81,12 +111,10 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       print('[DEBUG] Начало процесса входа...');
-      print('[DEBUG] Телефон: ${_phoneController.text}');
+      print('[DEBUG] Телефон (очищенный): $cleanPhone');
 
       // 1. Отправляем запрос на вход (получение кода)
-      final response = await ApiService.login(
-        telephone: _phoneController.text,
-      );
+      final response = await ApiService.login(telephone: cleanPhone);
 
       print('[DEBUG] Ответ от API логина: $response');
 
@@ -105,14 +133,13 @@ class _LoginPageState extends State<LoginPage> {
         context,
         MaterialPageRoute(
           builder: (context) => Registration4Page(
-            phoneNumber: _phoneController.text,
+            phoneNumber: cleanPhone, // Передаем очищенный номер
             codeTtl: codeTtl,
           ),
         ),
       );
 
       print('[DEBUG] Переход на страницу подтверждения кода выполнен');
-
     } catch (e) {
       print('[ERROR] Ошибка при входе: $e');
 
@@ -224,12 +251,13 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Поле телефона
+                      // Поле телефона с маской
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           TextField(
                             controller: _phoneController,
+                            inputFormatters: [maskFormatter], // Применяем маску
                             onChanged: (_) {
                               setState(() {
                                 _phoneHasError = false;
@@ -247,6 +275,11 @@ class _LoginPageState extends State<LoginPage> {
                                 color: _phoneHasError
                                     ? Colors.red
                                     : Colors.grey,
+                              ),
+                              hintText: '+7 (___) ___-__-__',
+                              hintStyle: const TextStyle(
+                                color: Colors.grey,
+                                fontFamily: 'Plus Jakarta Sans',
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -334,11 +367,10 @@ class _LoginPageState extends State<LoginPage> {
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => _login(),
+                          onPressed: _isLoading ? null : () => _login(),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _phoneController.text.isNotEmpty &&
+                            backgroundColor:
+                                _getCleanPhoneNumber().length >= 12 &&
                                     !_isLoading
                                 ? const Color(0xFF0F7EDE)
                                 : const Color(0xFFBABABA),

@@ -1,4 +1,5 @@
 // lib/services/api_service.dart (обновленный)
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_application_1/models/work-photo.dart';
@@ -81,19 +82,71 @@ class ApiService {
     String? patronymic,
     required int cityId,
     required String activeMode,
-    required int categoryId,
-     String? instUsername,
-     String? ttUsername,
+    required List<int> categoryIds,
+    String? instUsername,
+    String? ttUsername,
   }) => _profileApi.updateProfile(
     firstname: firstname,
     lastname: lastname,
     patronymic: patronymic,
     cityId: cityId,
     activeMode: activeMode,
-    categoryId: categoryId,
+    categoryIds: categoryIds,
     instUsername: instUsername,
-    ttUsername: ttUsername
+    ttUsername: ttUsername,
   );
+
+  // НОВЫЙ МЕТОД: Обновление профиля мастера (description, socials, categories)
+  static Future<Map<String, dynamic>> updateMasterProfile({
+    String? description,
+    List<dynamic>? categories,
+    String? ttUsername,
+    String? instUsername,
+  }) => _profileApi.updateMasterProfile(
+    description: description,
+    categories: categories,
+    ttUsername: ttUsername,
+    instUsername: instUsername,
+  );
+
+  // Добавьте этот метод в ApiService (в конец класса)
+  static Future<Map<String, dynamic>> updateClientOrder({
+    required String orderId,
+    String? title,
+    String? description,
+    String? status,
+    double? price,
+    int? categoryId,
+    int? cityId,
+    String? addressStreet,
+    String? addressHouse,
+    String? addressApartment,
+    String? telephone,
+    List<String>? images,
+  }) => _clientOrdersApi.updateClientOrder(
+    orderId: orderId,
+    title: title,
+    description: description,
+    status: status,
+    price: price,
+    categoryId: categoryId,
+    cityId: cityId,
+    addressStreet: addressStreet,
+    addressHouse: addressHouse,
+    addressApartment: addressApartment,
+    telephone: telephone,
+    images: images,
+  );
+
+  // Этот метод больше не нужен, так как категории обновляются через updateMasterProfile
+  // Но оставим для обратной совместимости
+  static Future<Map<String, dynamic>> updateMasterCategories({
+    required List<int> categoryIds,
+  }) async {
+    print('⚠️ updateMasterCategories устарел, используйте updateMasterProfile');
+    // Возвращаем пустой ответ, чтобы не ломать существующий код
+    return {'data': {}};
+  }
 
   static Future<Map<String, dynamic>> updateTelephone({
     required String telephone,
@@ -141,6 +194,78 @@ class ApiService {
   static Future<Map<String, dynamic>> getOrderById(String orderId) =>
       _ordersApi.getOrderById(orderId);
 
+  static String formatDateTime(String? dateTimeString) {
+    if (dateTimeString == null || dateTimeString.isEmpty) return '';
+
+    try {
+      // Пробуем разные форматы даты
+      DateTime date;
+      if (dateTimeString.contains(' ')) {
+        // Формат: "2026-02-26 16:03:19"
+        final parts = dateTimeString.split(' ');
+        final dateParts = parts[0].split('-');
+        final timeParts = parts[1].split(':');
+
+        date = DateTime(
+          int.parse(dateParts[0]),
+          int.parse(dateParts[1]),
+          int.parse(dateParts[2]),
+          int.parse(timeParts[0]),
+          int.parse(timeParts[1]),
+          int.parse(timeParts[2]),
+        );
+      } else {
+        // ISO формат: "2026-02-26T15:53:58.000000Z"
+        date = DateTime.parse(dateTimeString).toLocal();
+      }
+
+      // Форматируем для отображения
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays > 7) {
+        return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+      } else if (difference.inDays > 0) {
+        return '${difference.inDays} ${_getDaysWord(difference.inDays)} назад';
+      } else if (difference.inHours > 0) {
+        return '${difference.inHours} ${_getHoursWord(difference.inHours)} назад';
+      } else if (difference.inMinutes > 0) {
+        return '${difference.inMinutes} ${_getMinutesWord(difference.inMinutes)} назад';
+      } else {
+        return 'только что';
+      }
+    } catch (e) {
+      return dateTimeString;
+    }
+  }
+
+  static String _getDaysWord(int days) {
+    if (days % 10 == 1 && days % 100 != 11) return 'день';
+    if (days % 10 >= 2 &&
+        days % 10 <= 4 &&
+        (days % 100 < 10 || days % 100 >= 20))
+      return 'дня';
+    return 'дней';
+  }
+
+  static String _getHoursWord(int hours) {
+    if (hours % 10 == 1 && hours % 100 != 11) return 'час';
+    if (hours % 10 >= 2 &&
+        hours % 10 <= 4 &&
+        (hours % 100 < 10 || hours % 100 >= 20))
+      return 'часа';
+    return 'часов';
+  }
+
+  static String _getMinutesWord(int minutes) {
+    if (minutes % 10 == 1 && minutes % 100 != 11) return 'минуту';
+    if (minutes % 10 >= 2 &&
+        minutes % 10 <= 4 &&
+        (minutes % 100 < 10 || minutes % 100 >= 20))
+      return 'минуты';
+    return 'минут';
+  }
+
   static Future<void> deleteOrder(int orderId) =>
       _ordersApi.deleteOrder(orderId);
 
@@ -149,21 +274,12 @@ class ApiService {
     required String status,
   }) => _ordersApi.changeOrderStatus(orderId: orderId, status: status);
 
+  static Future<void> markOrderAsViewed(String orderId) =>
+      _ordersApi.markOrderAsViewed(orderId);
+
   // Client Orders методы
   static Future<Map<String, dynamic>> getClientOrders() =>
       _clientOrdersApi.getClientOrders();
-
-  static Future<Map<String, dynamic>> updateClientOrder({
-    required String orderId,
-    String? title,
-    String? description,
-    String? status,
-  }) => _clientOrdersApi.updateClientOrder(
-    orderId: orderId,
-    title: title,
-    description: description,
-    status: status,
-  );
 
   static Future<Map<String, dynamic>> createOrder({
     required int categoryId,

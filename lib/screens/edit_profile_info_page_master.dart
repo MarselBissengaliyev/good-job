@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/services/auth/auth_service.dart';
@@ -41,6 +42,14 @@ class _EditProfileInfoPageMasterState
     _phoneController = TextEditingController(text: '+7 (777) 777-77-77');
     _username1Controller = TextEditingController(text: '@username');
     _username2Controller = TextEditingController(text: '@username');
+    
+    // Устанавливаем цвет системной навигации
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
   }
 
   @override
@@ -61,6 +70,15 @@ class _EditProfileInfoPageMasterState
     }
     
     _timer?.cancel();
+    
+    // Возвращаем стандартные настройки при выходе
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    
     super.dispose();
   }
 
@@ -146,231 +164,256 @@ class _EditProfileInfoPageMasterState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Color(0xFF41454A),
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Редактировать профиль',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () async {
-              await AuthService.clearAuthData();
-              if (mounted)
-                Navigator.pushReplacementNamed(context, '/registration');
-            },
-            icon: Image.asset('assets/logout.png', width: 22, height: 22),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF96C5EB),
-                        border: Border.all(
-                          color: const Color(0xFF0F7EDE),
-                          width: 3,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset: false, // Предотвращает сжатие при открытии клавиатуры
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xFF41454A),
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Редактировать профиль',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: () async {
+                await AuthService.clearAuthData();
+                if (mounted)
+                  Navigator.pushReplacementNamed(context, '/registration');
+              },
+              icon: Image.asset('assets/logout.png', width: 22, height: 22),
+            ),
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                Center(
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF96C5EB),
+                          border: Border.all(
+                            color: const Color(0xFF0F7EDE),
+                            width: 3,
+                          ),
+                          image: const DecorationImage(
+                            image: AssetImage('assets/avatar.png'),
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                        image: const DecorationImage(
-                          image: AssetImage('assets/avatar.png'),
-                          fit: BoxFit.cover,
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F7EDE),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Два блока под аватаркой
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Блок "Мастер" с синим фоном
+                    Expanded(
+                      child: Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F7EDE),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Мастер',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
+
+                    const SizedBox(width: 10),
+
+                    // Блок "Заказчик" с белым фоном
+                    Expanded(
                       child: Container(
-                        width: 32,
-                        height: 32,
+                        height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F7EDE),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 6,
-                            ),
-                          ],
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE0E0E0)),
                         ),
                         child: const Center(
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 20,
+                          child: Text(
+                            'Заказчик',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF5F6368),
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 32),
 
-              // Два блока под аватаркой
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Блок "Мастер" с синим фоном
-                  Expanded(
-                    child: Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F7EDE),
-                        borderRadius: BorderRadius.circular(8),
+                // Секция "Основная информация"
+                _buildSectionHeader('Основная информация'),
+                const SizedBox(height: 16),
+                _buildTextFieldWithClear('Имя', _nameController),
+                const SizedBox(height: 8),
+                _buildTextFieldWithClear('Фамилия', _surnameController),
+                const SizedBox(height: 8),
+                _buildTextFieldWithClear('Отчество', _patronymicController),
+                const SizedBox(height: 32),
+
+                // Секция "Контактная информация"
+                _buildSectionHeader('Контактная информация'),
+                const SizedBox(height: 16),
+                _buildTextFieldWithClear('Телефон', _phoneController),
+                const SizedBox(height: 8),
+                _buildTextFieldWithClear('Username 1', _username1Controller),
+                const SizedBox(height: 8),
+                _buildTextFieldWithClear('Username 2', _username2Controller),
+                const SizedBox(height: 32),
+
+                // КНОПКА "СОХРАНИТЬ"
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _openVerificationModal,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F7EDE),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Center(
-                        child: Text(
-                          'Мастер',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                        ),
-                      ),
+                      elevation: 0,
                     ),
-                  ),
-
-                  const SizedBox(width: 10),
-
-                  // Блок "Заказчик" с белым фоном
-                  Expanded(
-                    child: Container(
-                      height: 40,
-                      decoration: BoxDecoration(
+                    child: const Text(
+                      'Сохранить',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE0E0E0)),
+                        fontFamily: 'Plus Jakarta Sans',
                       ),
-                      child: const Center(
-                        child: Text(
-                          'Заказчик',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF5F6368),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
+                    ),
+                  ),
+                ),
+                
+                // КНОПКА "МОИ РАБОТЫ" - добавлена
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _navigateToPortfolioPage,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(
+                          color: Color(0xFF0F7EDE),
+                          width: 2,
                         ),
                       ),
+                      elevation: 0,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-
-              // Секция "Основная информация"
-              _buildSectionHeader('Основная информация'),
-              const SizedBox(height: 16),
-              _buildTextFieldWithClear('Имя', _nameController),
-              const SizedBox(height: 8),
-              _buildTextFieldWithClear('Фамилия', _surnameController),
-              const SizedBox(height: 8),
-              _buildTextFieldWithClear('Отчество', _patronymicController),
-              const SizedBox(height: 32),
-
-              // Секция "Контактная информация"
-              _buildSectionHeader('Контактная информация'),
-              const SizedBox(height: 16),
-              _buildTextFieldWithClear('Телефон', _phoneController),
-              const SizedBox(height: 8),
-              _buildTextFieldWithClear('Username 1', _username1Controller),
-              const SizedBox(height: 8),
-              _buildTextFieldWithClear('Username 2', _username2Controller),
-              const SizedBox(height: 32),
-
-              // КНОПКА "СОХРАНИТЬ"
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _openVerificationModal,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F7EDE),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Сохранить',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ),
-              ),
-              
-              // КНОПКА "МОИ РАБОТЫ" - добавлена
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _navigateToPortfolioPage,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(
+                    child: const Text(
+                      'Мои работы',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                         color: Color(0xFF0F7EDE),
-                        width: 2,
+                        fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Мои работы',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF0F7EDE),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
-      ),
-      // Bottom Navigation Bar
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.account, // Указываем активную вкладку
-        accountType: AccountType.master,
+        // Bottom Navigation Bar с SafeArea
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+            child: CustomBottomNavBar(
+              activeItem: NavItem.account, // Указываем активную вкладку
+              accountType: AccountType.master,
+            ),
+          ),
+        ),
       ),
     );
   }

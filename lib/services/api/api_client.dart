@@ -109,6 +109,34 @@ class ApiClient {
     }
   }
 
+  
+  Future<dynamic> patch(String path, {dynamic body}) async {
+    final method = 'PATCH';
+    final uri = Uri.parse('$baseUrl$path');
+    
+    try {
+      final headers = await _getHeaders();
+      ApiLogger.logRequest(method, uri.toString(), headers: headers, body: body);
+      
+      final response = await http
+          .patch(uri, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
+      
+      ApiLogger.logResponse(response.statusCode, response.body);
+      
+      return _handleResponse(response);
+    } on TimeoutException catch (e) {
+      ApiLogger.logError(e);
+      throw ApiException('Превышено время ожидания');
+    } on SocketException catch (e) {
+      ApiLogger.logError(e);
+      throw ApiException('Ошибка сети. Проверьте подключение к интернету.');
+    } catch (e) {
+      ApiLogger.logError(e);
+      rethrow;
+    }
+  }
+
   Future<dynamic> delete(String path) async {
     final method = 'DELETE';
     final uri = Uri.parse('$baseUrl$path');

@@ -1,5 +1,6 @@
 // lib/screens/help_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -57,6 +58,30 @@ class _HelpPageState extends State<HelpPage> {
     },
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Устанавливаем цвет системной навигации
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Возвращаем стандартные настройки при выходе
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    super.dispose();
+  }
+
   void _toggleFaq(int index) {
     setState(() {
       _faqItems[index]['expanded'] = !_faqItems[index]['expanded'];
@@ -76,230 +101,255 @@ class _HelpPageState extends State<HelpPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF41454A),
-              size: 20,
-            ),
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Помощь',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        child: Column(  
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Заголовок с иконкой
-            Center(
-              child: Column(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F4FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.help_outline_rounded,
-                      color: Color(0xFF0F7EDE),
-                      size: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Чем мы можем помочь?',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1D2125),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Найдите ответы на частые вопросы\nили свяжитесь с нами',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF5F6368),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Раздел "Частые вопросы"
-            const Text(
-              'Частые вопросы',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1D2125),
-                fontFamily: 'Plus Jakarta Sans',
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Список FAQ
-            ..._faqItems.asMap().entries.map((entry) {
-              final index = entry.key;
-              final item = entry.value;
-              return _buildFaqItem(
-                question: item['question'],
-                answer: item['answer'],
-                isExpanded: item['expanded'],
-                onTap: () => _toggleFaq(index),
-              );
-            }),
-
-            const SizedBox(height: 32),
-
-            // Раздел "Свяжитесь с нами"
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset: false, // Предотвращает сжатие при открытии клавиатуры
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: Container(
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Свяжитесь с нами',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1D2125),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildContactItem(
-                    icon: Icons.phone_outlined,
-                    title: 'Телефон',
-                    subtitle: '+7 (700) 123-45-67',
-                    onTap: () => _launchUrl('tel:+77001234567'),
-                  ),
-                  const Divider(height: 24),
-                  _buildContactItem(
-                    icon: Icons.email_outlined,
-                    title: 'Email',
-                    subtitle: 'support@gj.kz',
-                    onTap: () => _launchUrl('mailto:support@gj.kz'),
-                  ),
-                  const Divider(height: 24),
-                  _buildContactItem(
-                    icon: Icons.chat_outlined,
-                    title: 'WhatsApp',
-                    subtitle: 'Написать в поддержку',
-                    onTap: () => _launchUrl('https://wa.me/77001234567'),
-                  ),
-                  const Divider(height: 24),
-                  _buildContactItem(
-                    icon: Icons.telegram,
-                    title: 'Telegram',
-                    subtitle: '@gj_support',
-                    onTap: () => _launchUrl('https://t.me/gj_support'),
-                  ),
-                ],
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Color(0xFF41454A),
+                size: 20,
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Дополнительная информация
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    'Время работы поддержки',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1D2125),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Пн-Пт: 09:00 - 20:00\nСб-Вс: 10:00 - 18:00',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF5F6368),
-                      height: 1.5,
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    height: 1,
-                    color: const Color(0xFFE0E0E0),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Среднее время ответа: до 2 часов',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF0F7EDE),
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                ],
-              ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Помощь',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
             ),
-
-            const SizedBox(height: 40),
-          ],
+          ),
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.account,
-        accountType: AccountType.client, // По умолчанию клиент
+        body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          child: Column(  
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Заголовок с иконкой
+              Center(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F4FF),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.help_outline_rounded,
+                        color: Color(0xFF0F7EDE),
+                        size: 40,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Чем мы можем помочь?',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Найдите ответы на частые вопросы\nили свяжитесь с нами',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF5F6368),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Раздел "Частые вопросы"
+              const Text(
+                'Частые вопросы',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D2125),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Список FAQ
+              ..._faqItems.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                return _buildFaqItem(
+                  question: item['question'],
+                  answer: item['answer'],
+                  isExpanded: item['expanded'],
+                  onTap: () => _toggleFaq(index),
+                );
+              }),
+
+              const SizedBox(height: 32),
+
+              // Раздел "Свяжитесь с нами"
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Свяжитесь с нами',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildContactItem(
+                      icon: Icons.phone_outlined,
+                      title: 'Телефон',
+                      subtitle: '+7 (700) 123-45-67',
+                      onTap: () => _launchUrl('tel:+77001234567'),
+                    ),
+                    const Divider(height: 24),
+                    _buildContactItem(
+                      icon: Icons.email_outlined,
+                      title: 'Email',
+                      subtitle: 'support@gj.kz',
+                      onTap: () => _launchUrl('mailto:support@gj.kz'),
+                    ),
+                    const Divider(height: 24),
+                    _buildContactItem(
+                      icon: Icons.chat_outlined,
+                      title: 'WhatsApp',
+                      subtitle: 'Написать в поддержку',
+                      onTap: () => _launchUrl('https://wa.me/77001234567'),
+                    ),
+                    const Divider(height: 24),
+                    _buildContactItem(
+                      icon: Icons.telegram,
+                      title: 'Telegram',
+                      subtitle: '@gj_support',
+                      onTap: () => _launchUrl('https://t.me/gj_support'),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Дополнительная информация
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Время работы поддержки',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Пн-Пт: 09:00 - 20:00\nСб-Вс: 10:00 - 18:00',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF5F6368),
+                        height: 1.5,
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      height: 1,
+                      color: const Color(0xFFE0E0E0),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Среднее время ответа: до 2 часов',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF0F7EDE),
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+            child: CustomBottomNavBar(
+              activeItem: NavItem.account,
+              accountType: AccountType.client, // По умолчанию клиент
+            ),
+          ),
+        ),
       ),
     );
   }

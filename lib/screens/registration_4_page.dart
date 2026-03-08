@@ -113,7 +113,7 @@ class _Registration4PageState extends State<Registration4Page> {
       } else {
         // Если payload нет, запрашиваем профиль (токен уже сохранен выше)
         final profile = await ApiService.getProfile();
-        roleToSave = profile['data']['active_mode'];
+        roleToSave = profile['data']['activeMode'];
       }
 
       if (roleToSave != null) {

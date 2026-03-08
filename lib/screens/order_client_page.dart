@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
+import 'package:flutter_application_1/screens/edit_order_page.dart';
 import 'package:flutter_application_1/screens/interested_in_order_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_application_1/services/api_service.dart';
@@ -23,6 +25,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
   Map<String, dynamic>? _order;
   bool _isLoading = true;
   String? _errorMessage;
+  bool _hasMarkedAsViewed = false; // Добавьте эту переменную
 
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
@@ -31,11 +34,28 @@ class _OrderClientPageState extends State<OrderClientPage> {
   void initState() {
     super.initState();
     _loadOrderData();
+
+    // Устанавливаем цвет системной навигации
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+
+    // Возвращаем стандартные настройки при выходе
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+
     super.dispose();
   }
 
@@ -50,6 +70,16 @@ class _OrderClientPageState extends State<OrderClientPage> {
       setState(() {
         _order = orderResponse['data'];
       });
+
+      // Отмечаем заказ как просмотренный ТОЛЬКО если это НЕ мой заказ
+      // и если еще не отмечали в этой сессии
+      if (!widget.isMyOrder && !_hasMarkedAsViewed && mounted) {
+        _hasMarkedAsViewed = true;
+        // Вызываем без await, чтобы не блокировать загрузку
+        ApiService.markOrderAsViewed(widget.orderId).catchError((error) {
+          print('Failed to mark order as viewed: $error');
+        });
+      }
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -174,387 +204,16 @@ class _OrderClientPageState extends State<OrderClientPage> {
   }
 
   void _editOrder() {
-    _showEditOrderDialog(context, _order!);
-  }
+    if (_order == null) return;
 
-  void _showEditOrderDialog(BuildContext context, dynamic order) {
-    final orderId = order['id']?.toString() ?? '0';
-    final titleController = TextEditingController(
-      text: order['title']?.toString() ?? '',
-    );
-    final descriptionController = TextEditingController(
-      text: order['description']?.toString() ?? '',
-    );
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.4),
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 20,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
-              maxWidth: 500,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 30,
-                    spreadRadius: 0,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Компактный заголовок
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.edit_note_rounded,
-                              size: 20,
-                              color: Color(0xFF2196F3),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Редактировать',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF41454A),
-                                  fontFamily: 'Plus Jakarta Sans',
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'ID: #$orderId',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF9E9E9E),
-                                  fontFamily: 'Plus Jakarta Sans',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: Icon(
-                              Icons.close_rounded,
-                              size: 18,
-                              color: const Color(0xFF5F6368),
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Контент с уменьшенными отступами
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Поле названия
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Название',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF41454A),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                  Text(
-                                    '${titleController.text.length}/70',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF9E9E9E),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFFE0E0E0),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: TextField(
-                                  controller: titleController,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: Color(0xFF41454A),
-                                    fontFamily: 'Plus Jakarta Sans',
-                                  ),
-                                  decoration: const InputDecoration(
-                                    hintText: 'Введите название',
-                                    hintStyle: TextStyle(
-                                      color: Color(0xFFBDBDBD),
-                                      fontSize: 15,
-                                    ),
-                                    contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 12,
-                                    ),
-                                    border: InputBorder.none,
-                                    counterText: '',
-                                  ),
-                                  maxLength: 70,
-                                  maxLines: 2,
-                                  minLines: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // Поле описания
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Описание',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF41454A),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                  Text(
-                                    '${descriptionController.text.length}/9000',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF9E9E9E),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                constraints: BoxConstraints(
-                                  maxHeight: 180,
-                                ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFFE0E0E0),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Scrollbar(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    child: TextField(
-                                      controller: descriptionController,
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        color: Color(0xFF41454A),
-                                        fontFamily: 'Plus Jakarta Sans',
-                                      ),
-                                      decoration: const InputDecoration(
-                                        hintText: 'Опишите детали заказа',
-                                        hintStyle: TextStyle(
-                                          color: Color(0xFFBDBDBD),
-                                          fontSize: 15,
-                                        ),
-                                        border: InputBorder.none,
-                                        counterText: '',
-                                      ),
-                                      maxLines: null,
-                                      maxLength: 9000,
-                                      keyboardType: TextInputType.multiline,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Компактные кнопки
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: Color(0xFFF0F0F0), width: 1),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF5F6368),
-                              side: const BorderSide(
-                                color: Color(0xFFE0E0E0),
-                                width: 1,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              backgroundColor: Colors.white,
-                            ),
-                            child: const Text(
-                              'Отмена',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Plus Jakarta Sans',
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              final title = titleController.text.trim();
-                              final description = descriptionController.text.trim();
-
-                              if (title.isEmpty || description.isEmpty) {
-                                _showCustomSnackBar(
-                                  message: 'Заполните все поля',
-                                  isSuccess: false,
-                                );
-                                return;
-                              }
-
-                              Navigator.pop(context);
-                              await _updateOrder(orderId, title, description);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2196F3),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              elevation: 0,
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.save_rounded,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Сохранить',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: 'Plus Jakarta Sans',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            EditOrderPage(order: _order!, onOrderUpdated: _loadOrderData),
+      ),
     );
   }
-
-  Future<void> _updateOrder(
-    String orderId,
-    String title,
-    String description,
-  ) async {
-    try {
-      _showCustomSnackBar(message: 'Сохранение изменений...', isSuccess: true);
-
-      await ApiService.updateClientOrder(
-        orderId: orderId,
-        title: title,
-        description: description,
-      );
-
-      _showCustomSnackBar(message: 'Заказ успешно обновлен', isSuccess: true);
-      _loadOrderData();
-    } catch (e) {
-      _showCustomSnackBar(
-        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-        isSuccess: false,
-      );
-    }
-  }
-
   Future<void> _publishOrder() async {
     try {
       _showCustomSnackBar(message: 'Публикация заказа...', isSuccess: true);
@@ -569,7 +228,10 @@ class _OrderClientPageState extends State<OrderClientPage> {
         _order?['is_active'] = true;
       });
 
-      _showCustomSnackBar(message: 'Заказ успешно опубликован', isSuccess: true);
+      _showCustomSnackBar(
+        message: 'Заказ успешно опубликован',
+        isSuccess: true,
+      );
     } catch (e) {
       _showCustomSnackBar(
         message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
@@ -700,10 +362,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
     final phone = _order?['telephone'];
 
     if (phone == null || phone.toString().isEmpty) {
-      _showCustomSnackBar(
-        message: 'У вас нет подписки',
-        isSuccess: false,
-      );
+      _showCustomSnackBar(message: 'У вас нет подписки', isSuccess: false);
       return;
     }
 
@@ -777,7 +436,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              _order?['title']?.length > 30 
+                              _order?['title']?.length > 30
                                   ? '${_order?['title'].substring(0, 30)}...'
                                   : _order?['title'] ?? 'Заказ',
                               style: TextStyle(
@@ -1071,40 +730,68 @@ class _OrderClientPageState extends State<OrderClientPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Color(0xFF41454A),
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.isMyOrder ? 'Мои заказы' : 'Заказ',
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _refreshData,
-            icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: _buildBody(),
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.work,
-        accountType: widget.isMyOrder ? AccountType.client : AccountType.master,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset:
+            false, // Предотвращает сжатие при открытии клавиатуры
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xFF41454A),
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            widget.isMyOrder ? 'Мои заказы' : 'Заказ',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: _refreshData,
+              icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
+            ),
+          ],
+        ),
+        body: _buildBody(),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+            child: CustomBottomNavBar(
+              activeItem: NavItem.work,
+              accountType: widget.isMyOrder
+                  ? AccountType.client
+                  : AccountType.master,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1377,6 +1064,12 @@ class _OrderClientPageState extends State<OrderClientPage> {
                       _buildMyOrderFooter()
                     else
                       _buildOtherOrderFooter(),
+
+                    // Секция просмотров для своих заказов
+                    if (widget.isMyOrder) ...[
+                      _buildViewsSection(),
+                      const SizedBox(height: 24),
+                    ],
                   ],
                 ),
               ),
@@ -1832,6 +1525,265 @@ class _OrderClientPageState extends State<OrderClientPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildViewsSection() {
+    final views = _order?['views'] as List?;
+
+    if (views == null || views.isEmpty) {
+      return Container(
+        margin: const EdgeInsets.only(top: 24),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F5F5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.visibility_off_outlined,
+                size: 30,
+                color: Color(0xFFBDBDBD),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Пока никто не просмотрел',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF757575),
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Когда мастера проявят интерес,\nони появятся здесь',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF9E9E9E),
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Заголовок с количеством просмотров
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.remove_red_eye_outlined,
+                    size: 18,
+                    color: Color(0xFF2196F3),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Просмотры',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${views.length} ${_getViewsWord(views.length)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF757575),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+
+          // Список просмотров
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: views.length,
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, indent: 72, color: Color(0xFFEEEEEE)),
+            itemBuilder: (context, index) {
+              final view = views[index];
+              final master = view['master'] ?? {};
+              final viewedAt = view['viewedAt'] ?? view['viewed_at'] ?? '';
+
+              return InkWell(
+                onTap: () => _openInterestedInPage(view),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      // Аватар мастера
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F0F0),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFE0E0E0),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.person_outline,
+                            size: 28,
+                            color: Color(0xFFBDBDBD),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      // Информация о мастере
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${master['firstname'] ?? ''} ${master['lastname'] ?? ''}'
+                                  .trim(),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF41454A),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5F5F5),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Мастер',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: const Color(0xFF757575),
+                                      fontFamily: 'Plus Jakarta Sans',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.access_time,
+                                  size: 12,
+                                  color: const Color(0xFF9E9E9E),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  ApiService.formatDateTime(viewedAt),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9E9E9E),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Стрелка для перехода
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F5F5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 14,
+                          color: Color(0xFF757575),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getViewsWord(int count) {
+    if (count % 10 == 1 && count % 100 != 11) return 'просмотр';
+    if (count % 10 >= 2 &&
+        count % 10 <= 4 &&
+        (count % 100 < 10 || count % 100 >= 20)) {
+      return 'просмотра';
+    }
+    return 'просмотров';
   }
 
   Widget _buildInfoRow(String label, String value, IconData icon) {

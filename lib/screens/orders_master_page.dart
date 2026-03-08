@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_application_1/custom_bottom_navbar.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
 import 'package:flutter_application_1/screens/order_client_page.dart'; // Добавлен импорт
 import 'package:flutter_application_1/services/api_service.dart';
+import 'package:flutter_application_1/services/common/profile_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class OrdersMasterPage extends StatefulWidget {
@@ -24,6 +26,10 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
   String? _selectedPrice = 'Любая стоимость';
   DateTime? _selectedDate;
 
+  final ProfileApi _profileApi = ProfileApi();
+  Map<String, dynamic>? _userData;
+  bool _isLoadingUser = true;
+
   // Списки для выпадающих меню - ИЗМЕНЕНО: теперь храним объекты категорий
   List<Map<String, dynamic>> _categories = [];
 
@@ -34,6 +40,109 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
   final LayerLink _priceLayerLink = LayerLink();
   final GlobalKey _categoryKey = GlobalKey();
   final GlobalKey _priceKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+    _fetchOrders();
+        _loadUserProfile(); // ДОБАВЛЕНО
+
+    // Устанавливаем цвет системной навигации
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+   Future<void> _loadUserProfile() async {
+    try {
+      final response = await _profileApi.getProfile();
+      if (mounted) {
+        setState(() {
+          _userData = response['data'];
+          _isLoadingUser = false;
+        });
+        print('✅ Загружены данные пользователя');
+        print('📱 Подписки: ${_userData?['subscriptions']}');
+      }
+    } on UnauthorizedException catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingUser = false);
+        _showError('Сессия истекла. Пожалуйста, войдите снова.');
+        // Можно перенаправить на страницу входа
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingUser = false);
+        _showError('Ошибка загрузки профиля: ${e.message}');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingUser = false);
+        _showError('Неизвестная ошибка при загрузке профиля');
+      }
+      print('❌ Ошибка загрузки профиля: $e');
+    }
+  }
+
+
+bool _hasActiveSubscription() {
+  print("TEST $_userData");
+    if (_userData == null) return false;
+    
+    try {
+      final subscriptions = _userData?['subscriptions'] as List?;
+      
+      // Если нет подписок
+      if (subscriptions == null || subscriptions.isEmpty) {
+        return false;
+      }
+      
+      // Берем первую подписку (обычно она одна активная)
+      final subscription = subscriptions.first;
+      
+      // Проверяем, есть ли поле endAt
+      if (subscription['endAt'] == null) {
+        return false;
+      }
+      
+      // Парсим дату окончания
+      final endAtStr = subscription['endAt'] as String;
+      final endAt = DateTime.parse(endAtStr);
+      final now = DateTime.now();
+      
+      // Проверяем, не истекла ли подписка
+      // Добавляем небольшой запас в 1 день, чтобы учитывать часовые пояса
+      final isActive = endAt.isAfter(now.subtract(const Duration(days: 1)));
+      
+      print('📅 Подписка до: $endAt, активна: $isActive');
+      
+      return isActive;
+      
+    } catch (e) {
+      print('❌ Ошибка при проверке подписки: $e');
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeCategoryOverlay();
+    _removePriceOverlay();
+
+    // Возвращаем стандартные настройки при выходе
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+
+    super.dispose();
+  }
 
   Future<void> _loadCategories() async {
     try {
@@ -75,20 +184,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCategories();
-    _fetchOrders();
-  }
-
-  @override
-  void dispose() {
-    _removeCategoryOverlay();
-    _removePriceOverlay();
-    super.dispose();
-  }
-
   // Функция для получения заказов с сервера
   Future<void> _fetchOrders() async {
     setState(() {
@@ -99,7 +194,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
     try {
       Map<String, dynamic> response;
 
-      // Если выбрана дата, передаем её в API
+      // Если выбрана дата, передаём её в API
       if (_selectedDate != null) {
         // Создаем даты для начала и конца выбранного дня
         final startOfDay = DateTime(
@@ -264,6 +359,27 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
 
   // ДОБАВЛЕНО: Функция для перехода на страницу заказа
   void _navigateToOrderDetail(Map<String, dynamic> order) {
+    // Если данные пользователя еще загружаются
+    if (_isLoadingUser) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Проверка подписки...'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    
+    // Проверяем наличие активной подписки
+    if (!_hasActiveSubscription()) {
+      // Если подписки нет - открываем Kaspi QR
+      _launchUrl('https://qr.kaspi.kz/19134627698424934147714893150004931409130');
+      
+      return;
+    }
+    
     // Получаем ID заказа
     final orderId = order['id']?.toString();
 
@@ -273,7 +389,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
         MaterialPageRoute(
           builder: (context) => OrderClientPage(
             orderId: orderId,
-            isMyOrder: false, // Важно: для мастера это чужой заказ
+            isMyOrder: false,
           ),
         ),
       );
@@ -283,6 +399,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
         const SnackBar(
           content: Text('Ошибка: ID заказа не найден'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -376,10 +493,8 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
                       child: ElevatedButton(
                         onPressed: () async {
                           Navigator.pop(context);
-
                           await _launchUrl('tel:+$phoneNumber');
                         },
-
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F7EDE),
                           foregroundColor: Colors.white,
@@ -900,211 +1015,168 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Color(0xFF41454A),
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Работа',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _fetchOrders,
-            icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Фильтры (селекты и датапикер)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.white,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  // Селект "Категория"
-                  CompositedTransformTarget(
-                    link: _categoryLayerLink,
-                    child: GestureDetector(
-                      key: _categoryKey,
-                      onTap: _toggleCategoryOverlay,
-                      child: Container(
-                        constraints: const BoxConstraints(minWidth: 140),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _categoryOverlayEntry != null
-                                ? const Color(0xFF0F7EDE)
-                                : const Color(0xFFCBCDCE),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.category_outlined,
-                              size: 18,
-                              color: Color(0xFF5F6368),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset:
+            false, // Предотвращает сжатие при открытии клавиатуры
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xFF41454A),
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Работа',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: _fetchOrders,
+              icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
+            ),
+          ],
+        ),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Фильтры (селекты и датапикер)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Colors.white,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Селект "Категория"
+                    CompositedTransformTarget(
+                      link: _categoryLayerLink,
+                      child: GestureDetector(
+                        key: _categoryKey,
+                        onTap: _toggleCategoryOverlay,
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 140),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _categoryOverlayEntry != null
+                                  ? const Color(0xFF0F7EDE)
+                                  : const Color(0xFFCBCDCE),
+                              width: 1.5,
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _selectedCategory!,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: _selectedCategory != 'Все категории'
-                                    ? const Color(0xFF41454A)
-                                    : const Color(0xFF9E9E9E),
-                                fontFamily: 'Plus Jakarta Sans',
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.category_outlined,
+                                size: 18,
+                                color: Color(0xFF5F6368),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              _categoryOverlayEntry != null
-                                  ? Icons.arrow_drop_up
-                                  : Icons.arrow_drop_down,
-                              size: 20,
-                              color: const Color(0xFF5F6368),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  // Селект "Стоимость"
-                  CompositedTransformTarget(
-                    link: _priceLayerLink,
-                    child: GestureDetector(
-                      key: _priceKey,
-                      onTap: _togglePriceOverlay,
-                      child: Container(
-                        constraints: const BoxConstraints(minWidth: 140),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _priceOverlayEntry != null
-                                ? const Color(0xFF0F7EDE)
-                                : const Color(0xFFCBCDCE),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.attach_money_outlined,
-                              size: 18,
-                              color: Color(0xFF5F6368),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _selectedPrice!,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: _selectedPrice != 'Любая стоимость'
-                                    ? const Color(0xFF41454A)
-                                    : const Color(0xFF9E9E9E),
-                                fontFamily: 'Plus Jakarta Sans',
+                              const SizedBox(width: 6),
+                              Text(
+                                _selectedCategory!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _selectedCategory != 'Все категории'
+                                      ? const Color(0xFF41454A)
+                                      : const Color(0xFF9E9E9E),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              _priceOverlayEntry != null
-                                  ? Icons.arrow_drop_up
-                                  : Icons.arrow_drop_down,
-                              size: 20,
-                              color: const Color(0xFF5F6368),
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Icon(
+                                _categoryOverlayEntry != null
+                                    ? Icons.arrow_drop_up
+                                    : Icons.arrow_drop_down,
+                                size: 20,
+                                color: const Color(0xFF5F6368),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
 
-                  // Датапикер
-                  GestureDetector(
-                    onTap: () => _selectDate(context),
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 140),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFCBCDCE),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 18,
-                            color: Color(0xFF5F6368),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _selectedDate != null
-                                ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
-                                : 'Дата',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: _selectedDate != null
-                                  ? const Color(0xFF41454A)
-                                  : const Color(0xFF9E9E9E),
-                              fontFamily: 'Plus Jakarta Sans',
+                    // Селект "Стоимость"
+                    CompositedTransformTarget(
+                      link: _priceLayerLink,
+                      child: GestureDetector(
+                        key: _priceKey,
+                        onTap: _togglePriceOverlay,
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 140),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _priceOverlayEntry != null
+                                  ? const Color(0xFF0F7EDE)
+                                  : const Color(0xFFCBCDCE),
+                              width: 1.5,
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.arrow_drop_down,
-                            size: 20,
-                            color: Color(0xFF5F6368),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.attach_money_outlined,
+                                size: 18,
+                                color: Color(0xFF5F6368),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _selectedPrice!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _selectedPrice != 'Любая стоимость'
+                                      ? const Color(0xFF41454A)
+                                      : const Color(0xFF9E9E9E),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _priceOverlayEntry != null
+                                    ? Icons.arrow_drop_up
+                                    : Icons.arrow_drop_down,
+                                size: 20,
+                                color: const Color(0xFF5F6368),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
 
-                  // Кнопка сброса фильтров
-                  if (_selectedCategory != 'Все категории' ||
-                      _selectedPrice != 'Любая стоимость' ||
-                      _selectedDate != null)
+                    // Датапикер
                     GestureDetector(
-                      onTap: _resetFilters,
+                      onTap: () => _selectDate(context),
                       child: Container(
-                        height: 39,
+                        constraints: const BoxConstraints(minWidth: 140),
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -1114,50 +1186,119 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
                             width: 1.5,
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.clear_all,
+                            const Icon(
+                              Icons.calendar_today_outlined,
                               size: 18,
                               color: Color(0xFF5F6368),
                             ),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Text(
-                              'Сбросить',
+                              _selectedDate != null
+                                  ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
+                                  : 'Дата',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF41454A),
+                                color: _selectedDate != null
+                                    ? const Color(0xFF41454A)
+                                    : const Color(0xFF9E9E9E),
                                 fontFamily: 'Plus Jakarta Sans',
                               ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.arrow_drop_down,
+                              size: 20,
+                              color: Color(0xFF5F6368),
                             ),
                           ],
                         ),
                       ),
                     ),
-                ],
+
+                    const SizedBox(width: 12),
+
+                    // Кнопка сброса фильтров
+                    if (_selectedCategory != 'Все категории' ||
+                        _selectedPrice != 'Любая стоимость' ||
+                        _selectedDate != null)
+                      GestureDetector(
+                        onTap: _resetFilters,
+                        child: Container(
+                          height: 39,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFCBCDCE),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.clear_all,
+                                size: 18,
+                                color: Color(0xFF5F6368),
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Сбросить',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF41454A),
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
+
+            const SizedBox(height: 8),
+
+            // Контент (загрузка/ошибка/список заказов)
+            Expanded(
+              child: _isLoading
+                  ? _buildLoadingIndicator()
+                  : _errorMessage.isNotEmpty
+                  ? _buildErrorWidget()
+                  : _filteredOrders.isEmpty
+                  ? _buildEmptyState()
+                  : _buildOrdersList(),
+            ),
+          ],
+        ),
+
+        // Bottom Navigation Bar с SafeArea
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+            child: CustomBottomNavBar(
+              activeItem: NavItem.work,
+              accountType: AccountType.master,
+            ),
           ),
-
-          const SizedBox(height: 8),
-
-          // Контент (загрузка/ошибка/список заказов)
-          Expanded(
-            child: _isLoading
-                ? _buildLoadingIndicator()
-                : _errorMessage.isNotEmpty
-                ? _buildErrorWidget()
-                : _filteredOrders.isEmpty
-                ? _buildEmptyState()
-                : _buildOrdersList(),
-          ),
-        ],
-      ),
-
-      // Bottom Navigation Bar
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.work,
-        accountType: AccountType.master,
+        ),
       ),
     );
   }
@@ -1581,7 +1722,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
 
                 const Spacer(),
 
-                // Кнопка "Показать телефон"
                 // Кнопка "Показать телефон" или сообщение об отсутствии подписки
                 if (order['telephone'] != null &&
                     order['telephone'].toString().isNotEmpty)

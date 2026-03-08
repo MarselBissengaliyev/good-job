@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/screens/login_page.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart'; // Добавить импорт
 import 'package:provider/provider.dart';
 
 import '../models/city.dart';
@@ -22,6 +23,13 @@ class _Registration3PageState extends State<Registration3Page> {
   TextEditingController surnameController = TextEditingController();
   TextEditingController phoneController = TextEditingController();
 
+  // Форматтер маски для телефона
+  final maskFormatter = MaskTextInputFormatter(
+    mask: '+7 (###) ###-##-##',
+    filter: {"#": RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
+
   bool _isLoading = false;
   bool _loadingCities = false;
   String? _errorMessage;
@@ -37,10 +45,30 @@ class _Registration3PageState extends State<Registration3Page> {
   // Для управления прокруткой
   final ScrollController _scrollController = ScrollController();
 
+  // Функция для очистки номера телефона от всех символов кроме цифр
+  String _getCleanPhoneNumber(String maskedNumber) {
+    // Удаляем все нецифровые символы
+    String cleanNumber = maskedNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    // Если номер начинается с 8 (российский формат), заменяем на 7
+    if (cleanNumber.startsWith('8') && cleanNumber.length == 11) {
+      cleanNumber = '7${cleanNumber.substring(1)}';
+    }
+    
+    // Добавляем + в начало, если его нет
+    if (!cleanNumber.startsWith('7')) {
+      cleanNumber = '7$cleanNumber';
+    }
+    
+    return '+$cleanNumber';
+  }
+
   bool get isFormValid {
+    // Проверяем, что все поля заполнены и телефон содержит достаточно цифр
+    String cleanPhone = _getCleanPhoneNumber(phoneController.text);
     return nameController.text.isNotEmpty &&
         surnameController.text.isNotEmpty &&
-        phoneController.text.isNotEmpty &&
+        cleanPhone.length >= 12 && // +7 и 10 цифр = 12 символов
         selectedCityId != null;
   }
 
@@ -232,7 +260,7 @@ class _Registration3PageState extends State<Registration3Page> {
                     fieldName = 'Телефон';
                     // Дополнительная информация для телефона
                     if (errorText.contains('Некорректный номер')) {
-                      errorText += '\nПример правильного формата: +77071234567';
+                      errorText += '\nПример правильного формата: +7 (777) 123-45-67';
                     }
                     break;
                   default:
@@ -293,7 +321,7 @@ class _Registration3PageState extends State<Registration3Page> {
   Future<void> _registerUser(BuildContext context) async {
     if (!isFormValid) {
       setState(() {
-        _errorMessage = 'Заполните все обязательные поля';
+        _errorMessage = 'Заполните все обязательные поля корректно';
       });
       return;
     }
@@ -307,9 +335,10 @@ class _Registration3PageState extends State<Registration3Page> {
     try {
       final roleProvider = Provider.of<RoleProvider>(context, listen: false);
 
-      // Форматируем номер телефона
-      String phoneNumber = phoneController.text;
-      print('[DEBUG] Исходный номер телефона: $phoneNumber');
+      // Получаем очищенный номер телефона
+      String phoneNumber = _getCleanPhoneNumber(phoneController.text);
+      print('[DEBUG] Исходный номер телефона: ${phoneController.text}');
+      print('[DEBUG] Очищенный номер телефона: $phoneNumber');
 
       // Регистрируем пользователя
       print('[DEBUG] Начинаем регистрацию пользователя...');
@@ -336,7 +365,7 @@ class _Registration3PageState extends State<Registration3Page> {
       final registerResponse = await ApiService.registerUser(
         firstname: firstname,
         lastname: lastname,
-        telephone: phoneNumber,
+        telephone: phoneNumber, // Используем очищенный номер
         cityId: selectedCityId!,
         activeMode: roleProvider.selectedRole == UserRole.master ? 'master' : 'client',
       );
@@ -359,7 +388,7 @@ class _Registration3PageState extends State<Registration3Page> {
         context,
         MaterialPageRoute(
           builder: (context) => Registration4Page(
-            phoneNumber: phoneNumber,
+            phoneNumber: phoneNumber, // Передаем очищенный номер
             codeTtl: ttl, // Передаем полученное время
           ),
         ),
@@ -804,13 +833,14 @@ class _Registration3PageState extends State<Registration3Page> {
                                 ),
                                 const SizedBox(height: 12),
 
-                                // Поле телефона
+                                // Поле телефона с маской
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     TextField(
                                       controller: phoneController,
                                       focusNode: _phoneFocusNode,
+                                      inputFormatters: [maskFormatter], // Применяем маску
                                       onChanged: (_) {
                                         setState(() {
                                           if (_fieldErrors != null) {
@@ -824,6 +854,11 @@ class _Registration3PageState extends State<Registration3Page> {
                                         labelStyle: const TextStyle(
                                           fontFamily: 'Plus Jakarta Sans',
                                           color: Colors.grey,
+                                        ),
+                                        hintText: '+7 (___) ___-__-__',
+                                        hintStyle: const TextStyle(
+                                          color: Colors.grey,
+                                          fontFamily: 'Plus Jakarta Sans',
                                         ),
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(
@@ -855,6 +890,16 @@ class _Registration3PageState extends State<Registration3Page> {
                                           fontSize: 12,
                                           color: Colors.grey,
                                         ),
+                                        suffixIcon: phoneController.text.isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(
+                                                  Icons.close,
+                                                  size: 18,
+                                                  color: Color(0xFF9AA0A6),
+                                                ),
+                                                onPressed: () => setState(() => phoneController.clear()),
+                                              )
+                                            : null,
                                       ),
                                       style: const TextStyle(
                                         fontFamily: 'Plus Jakarta Sans',
@@ -862,6 +907,30 @@ class _Registration3PageState extends State<Registration3Page> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
+                                    
+                                    // Подсказка о формате номера
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.info_outline,
+                                          size: 14,
+                                          color: Color(0xFF9AA0A6),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            'Введите номер в формате: +7 (777) 777-77-77',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: _getFieldError('Телефон') != null
+                                                  ? Colors.red
+                                                  : const Color(0xFF9AA0A6),
+                                              fontFamily: 'Plus Jakarta Sans',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                     _buildFieldError('Телефон'),
                                   ],
                                 ),

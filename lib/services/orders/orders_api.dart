@@ -1,5 +1,3 @@
-// lib/services/orders/orders_api.dart
-
 import '../api/api_client.dart';
 import '../api/api_logger.dart';
 
@@ -15,7 +13,7 @@ class OrdersApi {
     DateTime? endDate,
   }) async {
     const method = 'GET';
-    const url = '/orders';
+    const url = '/orders?limit=100';
 
     final queryParams = <String, String>{};
     if (page != null) queryParams['page'] = page.toString();
@@ -115,6 +113,14 @@ class OrdersApi {
     } catch (e) {
       ApiLogger.logError(e);
       rethrow;
+    }
+  }
+
+  Future<void> markOrderAsViewed(String orderId) async {
+    try {
+      await _client.post('/orders/$orderId/view');
+    } catch (e) {
+      print('Error marking order as viewed: $e');
     }
   }
 }

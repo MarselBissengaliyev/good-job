@@ -1,6 +1,7 @@
 // lib/services/common/profile_api.dart
 
 import 'package:flutter_application_1/services/auth/auth_service.dart';
+
 import '../api/api_client.dart';
 import '../api/api_logger.dart';
 
@@ -31,7 +32,7 @@ class ProfileApi {
     String? patronymic,
     required int cityId,
     required String activeMode,
-    required categoryId,
+    required List<int> categoryIds,
     String? instUsername,
     String? ttUsername,
   }) async {
@@ -44,7 +45,7 @@ class ProfileApi {
       'patronymic': patronymic ?? '',
       'city_id': cityId,
       'active_mode': activeMode,
-      'categoryId': categoryId,
+      'categoryIds': categoryIds,
       'ttUsername': ttUsername,
       'instUsername': instUsername,
     };
@@ -53,6 +54,47 @@ class ProfileApi {
 
     try {
       final response = await _client.put(url, body: body);
+      ApiLogger.logResponse(200, response);
+      return response;
+    } catch (e) {
+      ApiLogger.logError(e);
+      rethrow;
+    }
+  }
+
+  // НОВЫЙ МЕТОД: Специально для обновления данных мастера (description, socials, categories)
+  Future<Map<String, dynamic>> updateMasterProfile({
+    String? description,
+    List<dynamic>? categories,
+    String? ttUsername,
+    String? instUsername,
+  }) async {
+    const method = 'PATCH';
+    const url = '/me/master';
+
+    final Map<String, dynamic> body = {};
+
+    if (description != null) {
+      body['description'] = description;
+    }
+
+    if (categories != null) {
+      body['categories'] = categories;
+    }
+
+    // Добавляем socials только если они не null
+    if (ttUsername != null) {
+      body['tt_username'] = ttUsername;
+    }
+
+    if (instUsername != null) {
+      body['inst_username'] = instUsername;
+    }
+
+    ApiLogger.logRequest(method, url, body: body);
+
+    try {
+      final response = await _client.patch(url, body: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {

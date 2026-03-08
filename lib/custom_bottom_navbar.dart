@@ -4,6 +4,7 @@ import 'package:flutter_application_1/screens/add_order_client_page.dart';
 import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
 import 'package:flutter_application_1/screens/my_orders_client_page.dart';
 import 'package:flutter_application_1/screens/orders_master_page.dart';
+import 'package:flutter_application_1/screens/price_page.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
   final NavItem activeItem;
@@ -30,9 +31,9 @@ class CustomBottomNavBar extends StatelessWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: accountType == AccountType.master 
-            ? _buildMasterNavItems(context)
-            : _buildClientNavItems(context),
+          children: accountType == AccountType.master
+              ? _buildMasterNavItems(context)
+              : _buildClientNavItems(context),
         ),
       ),
     );
@@ -50,16 +51,16 @@ class CustomBottomNavBar extends StatelessWidget {
       _buildNavItem(
         context,
         iconAsset: 'assets/price.png',
-        label: 'Мои работы',
-        navItem: NavItem.portfolio,
-        destination: const EditPortfolioMasterPage(),
+        label: 'Прайс',
+        navItem: NavItem.price,
+        destination: PricePage(),
       ),
       _buildNavItem(
         context,
         iconAsset: 'assets/account.png',
         label: 'Аккаунт',
         navItem: NavItem.account,
-        destination: AccountPage(accountType: accountType),
+        destination: const AccountPage(accountType: AccountType.master),
       ),
     ];
   }
@@ -68,24 +69,27 @@ class CustomBottomNavBar extends StatelessWidget {
     return [
       _buildNavItem(
         context,
-        iconAsset: 'assets/price.png',
+        iconAsset: 'assets/work.png',
         label: 'Мои заказы',
         navItem: NavItem.orders,
-        destination: const MyOrdersClientPage(), // Или отдельная страница "Мои заказы"
+        destination:
+            const MyOrdersClientPage(), // Или отдельная страница "Мои заказы"
       ),
       _buildNavItem(
         context,
-        iconAsset: 'assets/work.png', // Нужно добавить иконку
-        label: 'Добавить заказ',
-        navItem: NavItem.addOrder,
-        destination: const AddOrderClientPage(),
+        iconAsset: 'assets/price.png', // Нужно добавить иконку
+        label: 'Прайс',
+        navItem: NavItem.price,
+        destination: PricePage(),
       ),
-            _buildNavItem(
+      _buildNavItem(
         context,
         iconAsset: 'assets/account.png',
         label: 'Аккаунт',
         navItem: NavItem.account,
-        destination: const AccountPage(accountType: AccountType.client), // Замените на вашу страницу заказов клиента
+        destination: const AccountPage(
+          accountType: AccountType.client,
+        ), // Замените на вашу страницу заказов клиента
       ),
     ];
   }
@@ -133,13 +137,7 @@ class CustomBottomNavBar extends StatelessWidget {
 }
 
 // Обновленное перечисление для активного элемента навигации
-enum NavItem {
-  work,
-  portfolio,
-  account,
-  orders,
-  addOrder,
-}
+enum NavItem { work, portfolio, account, orders, addOrder, price }
 
 // Динамическая версия для управления навигацией через состояние
 class CustomBottomNavBarDynamic extends StatelessWidget {
@@ -169,9 +167,9 @@ class CustomBottomNavBarDynamic extends StatelessWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: accountType == AccountType.master 
-            ? _buildMasterNavItems()
-            : _buildClientNavItems(),
+          children: accountType == AccountType.master
+              ? _buildMasterNavItems()
+              : _buildClientNavItems(),
         ),
       ),
     );
@@ -186,8 +184,8 @@ class CustomBottomNavBarDynamic extends StatelessWidget {
       ),
       _buildNavItem(
         iconAsset: 'assets/price.png',
-        label: 'Мои работы',
-        navItem: NavItem.portfolio,
+        label: 'Прайс',
+        navItem: NavItem.price,
       ),
       _buildNavItem(
         iconAsset: 'assets/account.png',
@@ -201,13 +199,13 @@ class CustomBottomNavBarDynamic extends StatelessWidget {
     return [
       _buildNavItem(
         iconAsset: 'assets/work.png',
-        label: 'Работа',
+        label: 'Мои заказы',
         navItem: NavItem.work,
       ),
       _buildNavItem(
         iconAsset: 'assets/price.png',
-        label: 'Мои заказы',
-        navItem: NavItem.orders,
+        label: 'Прайс',
+        navItem: NavItem.price,
       ),
       _buildNavItem(
         iconAsset: 'assets/add_order.png', // Добавьте эту иконку в assets
@@ -256,7 +254,8 @@ class CustomBottomNavBarDynamic extends StatelessWidget {
 class NavigationWrapper extends StatefulWidget {
   final AccountType accountType;
 
-  const NavigationWrapper({Key? key, required this.accountType}) : super(key: key);
+  const NavigationWrapper({Key? key, required this.accountType})
+    : super(key: key);
 
   @override
   _NavigationWrapperState createState() => _NavigationWrapperState();
@@ -288,8 +287,10 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
           return const OrdersMasterPage();
         case NavItem.portfolio:
           return const EditPortfolioMasterPage();
+        case NavItem.price:
+          return PricePage(); 
         case NavItem.account:
-          return AccountPage(accountType: widget.accountType);
+          return AccountPage(accountType: AccountType.master);
         default:
           return const OrdersMasterPage();
       }
@@ -300,6 +301,8 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
           return const AddOrderClientPage();
         case NavItem.orders:
           return const MyOrdersClientPage(); // или ClientMyOrdersPage()
+        case NavItem.price:
+          return PricePage();
         case NavItem.account:
           return const AccountPage(accountType: AccountType.client);
         default:

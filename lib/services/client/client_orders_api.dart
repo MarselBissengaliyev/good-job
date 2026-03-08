@@ -30,31 +30,48 @@ class ClientOrdersApi {
     }
   }
 
-  Future<Map<String, dynamic>> updateClientOrder({
-    required String orderId,
-    String? title,
-    String? description,
-    String? status,
-  }) async {
-    const method = 'PUT';
-    final url = '/orders/$orderId';
-    
-    final body = <String, dynamic>{};
-    if (title != null && title.isNotEmpty) body['title'] = title;
-    if (description != null && description.isNotEmpty) body['description'] = description;
-    if (status != null && status.isNotEmpty) body['status'] = status;
+// В классе ClientOrdersApi обновите метод updateClientOrder
+Future<Map<String, dynamic>> updateClientOrder({
+  required String orderId,
+  String? title,
+  String? description,
+  String? status,
+  double? price,
+  int? categoryId,
+  int? cityId,
+  String? addressStreet,
+  String? addressHouse,
+  String? addressApartment,
+  String? telephone,
+  List<String>? images,
+}) async {
+  const method = 'PUT';
+  final url = '/orders/$orderId';
+  
+  final body = <String, dynamic>{};
+  if (title != null && title.isNotEmpty) body['title'] = title;
+  if (description != null && description.isNotEmpty) body['description'] = description;
+  if (status != null && status.isNotEmpty) body['status'] = status;
+  if (price != null) body['price'] = price;
+  if (categoryId != null) body['category_id'] = categoryId;
+  if (cityId != null) body['city_id'] = cityId;
+  if (addressStreet != null) body['address_street'] = addressStreet;
+  if (addressHouse != null) body['address_house'] = addressHouse;
+  if (addressApartment != null) body['address_apartment'] = addressApartment;
+  if (telephone != null) body['telephone'] = telephone;
+  if (images != null) body['images'] = images;
 
-    ApiLogger.logRequest(method, url, body: body);
+  ApiLogger.logRequest(method, url, body: body);
 
-    try {
-      final response = await _client.put(url, body: body);
-      ApiLogger.logResponse(200, response);
-      return response;
-    } catch (e) {
-      ApiLogger.logError(e);
-      rethrow;
-    }
+  try {
+    final response = await _client.put(url, body: body);
+    ApiLogger.logResponse(200, response);
+    return response;
+  } catch (e) {
+    ApiLogger.logError(e);
+    rethrow;
   }
+}
 
   Future<Map<String, dynamic>> createOrder({
     required int categoryId,
@@ -108,6 +125,7 @@ class ClientOrdersApi {
         'address_street': addressStreet,
         'address_house': addressHouse,
         'address_apartment': addressApartment,
+        "addressApartment": addressApartment,
         'telephone': telephone,
         'price': price,
         'images': finalImages,

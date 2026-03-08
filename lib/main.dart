@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/screens/account_page.dart';
+import 'package:flutter_application_1/screens/edit_profile_page.dart';
 import 'package:flutter_application_1/screens/home_page.dart';
 import 'package:provider/provider.dart';
 
@@ -57,7 +58,7 @@ class MyApp extends StatelessWidget {
           '/': (context) => const AuthChecker(),
           '/registration': (context) => const MyHomePage(),
           '/account-master': (context) =>
-              const AccountPage(accountType: AccountType.master),
+              const EditProfilePage(initialMode: ProfileMode.master),
           '/account-client': (context) =>
               const AccountPage(accountType: AccountType.client),
         },

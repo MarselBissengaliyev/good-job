@@ -1,10 +1,9 @@
-// lib/services/api/api_logger.dart
-
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 class ApiLogger {
-  static const bool _enabled = kDebugMode; // отключается в release
+  static const bool _enabled = kDebugMode;
+  static const int _maxLogLength = 2000; // Лимит для обычного Body
 
   static void _print(String message) {
     if (_enabled) {
@@ -18,61 +17,46 @@ class ApiLogger {
     Map<String, String>? headers,
     dynamic body,
   }) {
-    _print('''
-══════════════════════════════════════════════
-➡️  REQUEST
-Method: $method
-URL: $url
-''');
+    final token = headers?['Authorization'];
+    _print('➡️ $method: $url');
 
-    if (headers != null) {
-      _print('📨 Headers:\n${_prettyJson(headers)}');
+    // Если токен есть, выводим его отдельной строкой полностью
+    if (token != null) {
+      _print('🔑 Auth: $token'); 
     }
 
     if (body != null) {
-      _print('📦 Body:\n${_prettyJson(body)}');
+      _print('📦 Body: ${_truncate(_prettyJson(body))}');
     }
-
-    _print('══════════════════════════════════════════════');
   }
 
   static void logResponse(int statusCode, dynamic body) {
     final isSuccess = statusCode >= 200 && statusCode < 300;
     final icon = isSuccess ? '✅' : '❌';
-
-    _print('''
-══════════════════════════════════════════════
-$icon RESPONSE
-Status: $statusCode
-''');
+    
+    _print('$icon STATUS: $statusCode');
 
     if (body != null) {
-      _print('📦 Body:\n${_prettyJson(body)}');
+      _print('📥 Body: ${_truncate(_prettyJson(body))}');
     }
-
-    _print('══════════════════════════════════════════════');
+    _print('---');
   }
 
   static void logError(dynamic error) {
-    _print('''
-══════════════════════════════════════════════
-🔥 ERROR
-$error
-══════════════════════════════════════════════
-''');
+    _print('🔥 ERROR: $error');
+  }
+
+  static String _truncate(String text) {
+    if (text.length > _maxLogLength) {
+      return '${text.substring(0, _maxLogLength)}... [ОБРЕЗАНО]';
+    }
+    return text;
   }
 
   static String _prettyJson(dynamic input) {
     try {
-      dynamic decoded;
-
-      if (input is String) {
-        decoded = jsonDecode(input);
-      } else {
-        decoded = input;
-      }
-
-      return const JsonEncoder.withIndent('  ').convert(decoded);
+      dynamic decoded = (input is String) ? jsonDecode(input) : input;
+      return jsonEncode(decoded);
     } catch (_) {
       return input.toString();
     }

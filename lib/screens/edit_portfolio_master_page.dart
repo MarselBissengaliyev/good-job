@@ -26,6 +26,26 @@ class _EditPortfolioMasterPageState extends State<EditPortfolioMasterPage> {
   void initState() {
     super.initState();
     _loadWorkPhotos();
+    
+    // Устанавливаем цвет системной навигации
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Возвращаем стандартные настройки при выходе
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    super.dispose();
   }
 
   Future<void> _loadWorkPhotos() async {
@@ -55,172 +75,197 @@ class _EditPortfolioMasterPageState extends State<EditPortfolioMasterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFFAFAFA),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Color(0xFF41454A),
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Мои работы',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF41454A),
-            fontFamily: 'Plus Jakarta Sans',
-          ),
-        ),
-        actions: [
-          IconButton(
-           onPressed: () async {
-              await AuthService.clearAuthData();
-              if (mounted)
-                Navigator.pushReplacementNamed(context, '/registration');
-            },
-            icon: Image.asset('assets/logout.png', width: 22, height: 22),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF0F7EDE)),
-            )
-          : Padding(
-              padding: const EdgeInsets.all(12),
-              child: SingleChildScrollView(
-                clipBehavior: Clip.none,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: 10,
-                        left: 4,
-                        right: 4,
-                      ),
-                      child: GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              childAspectRatio: 1,
-                            ),
-                        itemCount: _portfolioImages.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == _portfolioImages.length) {
-                            return GestureDetector(
-                              onTap: () {
-                                _addNewWork();
-                              },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE0E0E0),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.add,
-                                        size: 32,
-                                        color: Color(0xFF0F7EDE),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset: false, // Предотвращает сжатие при открытии клавиатуры
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xFF41454A),
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            'Мои работы',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: () async {
+                await AuthService.clearAuthData();
+                if (mounted)
+                  Navigator.pushReplacementNamed(context, '/registration');
+              },
+              icon: Image.asset('assets/logout.png', width: 22, height: 22),
+            ),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF0F7EDE)),
+              )
+            : Padding(
+                padding: const EdgeInsets.all(12),
+                child: SingleChildScrollView(
+                  clipBehavior: Clip.none,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          top: 10,
+                          left: 4,
+                          right: 4,
+                        ),
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: 8,
+                                childAspectRatio: 1,
                               ),
-                            );
-                          }
-
-                          final row = (index / 3).floor();
-                          final column = index % 3;
-
-                          return Container(
-                            margin: EdgeInsets.only(
-                              right: column == 2 ? 4 : 0,
-                              left: column == 0 ? 4 : 0,
-                              top: row == 0 ? 4 : 0,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Container(
+                          itemCount: _portfolioImages.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == _portfolioImages.length) {
+                              return GestureDetector(
+                                onTap: () {
+                                  _addNewWork();
+                                },
+                                child: Container(
                                   decoration: BoxDecoration(
+                                    color: const Color(0xFFE0E0E0),
                                     borderRadius: BorderRadius.circular(12),
-                                    image: DecorationImage(
-                                      image: NetworkImage(
-                                        'http://gj-back.checkedout.kz/storage/${_portfolioImages[index].path}',
-                                      ),
-                                      fit: BoxFit.cover,
+                                  ),
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.add,
+                                          size: 32,
+                                          color: Color(0xFF0F7EDE),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
+                              );
+                            }
 
-                                Positioned(
-                                  top: -6,
-                                  right: -6,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      _deleteWork(_portfolioImages[index].id);
-                                    },
-                                    child: Container(
-                                      width: 28,
-                                      height: 28,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F7EDE),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.2,
-                                            ),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
+                            final row = (index / 3).floor();
+                            final column = index % 3;
+
+                            return Container(
+                              margin: EdgeInsets.only(
+                                right: column == 2 ? 4 : 0,
+                                left: column == 0 ? 4 : 0,
+                                top: row == 0 ? 4 : 0,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      image: DecorationImage(
+                                        image: NetworkImage(
+                                          'http://gj-back.checkedout.kz/storage/${_portfolioImages[index].path}',
+                                        ),
+                                        fit: BoxFit.cover,
                                       ),
-                                      child: Center(
-                                        child: Image.asset(
-                                          'assets/close.png',
-                                          width: 14,
-                                          height: 14,
-                                          color: Colors.white,
+                                    ),
+                                  ),
+
+                                  Positioned(
+                                    top: -6,
+                                    right: -6,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        _deleteWork(_portfolioImages[index].id);
+                                      },
+                                      child: Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F7EDE),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.2,
+                                              ),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Center(
+                                          child: Image.asset(
+                                            'assets/close.png',
+                                            width: 14,
+                                            height: 14,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 100),
-                  ],
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-      bottomNavigationBar: CustomBottomNavBar(
-        activeItem: NavItem.portfolio, // Указываем активную вкладку
-        accountType: AccountType.master,
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+            child: CustomBottomNavBar(
+              activeItem: NavItem.portfolio, // Указываем активную вкладку
+              accountType: AccountType.master,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -602,7 +647,3 @@ enum PermissionStatus {
   limited,
   provisional,
 }
-
-// Также добавьте в pubspec.yaml для полноценной работы с разрешениями:
-// permission_handler: ^10.4.3
-// url_launcher: ^6.1.14
