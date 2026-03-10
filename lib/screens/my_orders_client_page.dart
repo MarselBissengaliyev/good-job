@@ -837,44 +837,20 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage> {
   }
 
   void _editOrder(dynamic order) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            EditOrderPage(order: order, onOrderUpdated:() => {}),
-      ),
-    );
-  }
-
-  Future<void> _updateOrder(
-    String orderId,
-    String title,
-    String description,
-  ) async {
-    HapticFeedback.mediumImpact();
-
-    try {
-      _showCustomSnackBar(message: 'Сохранение изменений...', isSuccess: true);
-
-      await ApiService.updateClientOrder(
+    if (order == null) return;
+  
+  final orderId = order!['id'].toString();
+  
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => EditOrderPage(
         orderId: orderId,
-        title: title,
-        description: description,
-      );
-
-      HapticFeedback.heavyImpact();
-      _showCustomSnackBar(message: 'Заказ успешно обновлен', isSuccess: true);
-
-      _loadOrders();
-    } catch (e) {
-      HapticFeedback.vibrate();
-      _showCustomSnackBar(
-        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-        isSuccess: false,
-      );
-    }
+        onOrderUpdated: () => {},
+      ),
+    ),
+  );
   }
-
   Future<void> _unpublishOrder(String orderId) async {
     HapticFeedback.mediumImpact();
 

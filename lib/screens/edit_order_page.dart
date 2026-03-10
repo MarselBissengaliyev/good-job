@@ -6,12 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/api_service.dart';
 
 class EditOrderPage extends StatefulWidget {
-  final Map<String, dynamic> order;
+  final String orderId; // Теперь принимаем только ID
   final Function() onOrderUpdated;
 
   const EditOrderPage({
     super.key,
-    required this.order,
+    required this.orderId,
     required this.onOrderUpdated,
   });
 
@@ -35,6 +35,7 @@ class _EditOrderPageState extends State<EditOrderPage> {
   int? _selectedCityId;
   bool _isLoading = false;
   bool _isLoadingData = true;
+  String? _errorMessage;
 
   // Изображения
   List<String> _existingImages = [];
@@ -45,19 +46,54 @@ class _EditOrderPageState extends State<EditOrderPage> {
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
-    _initializeForm();
+    _loadAllData();
   }
 
-  void _initializeForm() {
-    final order = widget.order;
-    
+  Future<void> _loadAllData() async {
+    setState(() {
+      _isLoadingData = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Загружаем данные заказа и справочники параллельно
+      await Future.wait([
+        _loadOrderData(),
+        _loadCategoriesAndCities(),
+      ]);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Ошибка загрузки данных: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoadingData = false;
+      });
+    }
+  }
+
+  Future<void> _loadOrderData() async {
+    try {
+      final response = await ApiService.getOrderById(widget.orderId);
+      final order = response['data'];
+
+      if (mounted) {
+        setState(() {
+          _initializeForm(order);
+        });
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  void _initializeForm(Map<String, dynamic> order) {
     _titleController.text = order['title'] ?? '';
     _descriptionController.text = order['description'] ?? '';
     _priceController.text = (order['price'] as num?)?.toString() ?? '0';
-    _streetController.text = order['address_street'] ?? '';
-    _houseController.text = order['address_house'] ?? '';
-    _apartmentController.text = order['address_apartment'] ?? '';
+    _streetController.text = order['addressStreet'] ?? '';
+    _houseController.text = order['addressHouse'] ?? '';
+    _apartmentController.text = order['addressApartment'] ?? '';
     _phoneController.text = order['telephone'] ?? '';
 
     _selectedCategoryId = order['category']?['id'] is String
@@ -68,21 +104,19 @@ class _EditOrderPageState extends State<EditOrderPage> {
     _existingImages = List<String>.from(order['images'] ?? []);
   }
 
-  Future<void> _loadInitialData() async {
-    setState(() => _isLoadingData = true);
-
+  Future<void> _loadCategoriesAndCities() async {
     try {
       final categories = await ApiService.getCategories();
       final cities = await ApiService.getCities();
 
-      setState(() {
-        _categories = categories;
-        _cities = cities;
-        _isLoadingData = false;
-      });
+      if (mounted) {
+        setState(() {
+          _categories = categories;
+          _cities = cities;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoadingData = false);
-      _showSnackBar('Ошибка загрузки данных: $e', isError: true);
+      rethrow;
     }
   }
 
@@ -137,11 +171,9 @@ class _EditOrderPageState extends State<EditOrderPage> {
         ...uploadedImages,
       ];
 
-      final orderId = widget.order['id'].toString();
-
       // Обновляем заказ
       await ApiService.updateClientOrder(
-        orderId: orderId,
+        orderId: widget.orderId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         price: double.parse(_priceController.text.trim()),
@@ -191,7 +223,8 @@ class _EditOrderPageState extends State<EditOrderPage> {
           elevation: 0,
           backgroundColor: const Color(0xFFFAFAFA),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF41454A)),
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Color(0xFF41454A)),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -204,28 +237,82 @@ class _EditOrderPageState extends State<EditOrderPage> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: _isLoading ? null : _saveOrder,
-              child: Text(
-                'Сохранить',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: _isLoading ? Colors.grey : const Color(0xFF2196F3),
-                  fontFamily: 'Plus Jakarta Sans',
+            if (!_isLoadingData && _errorMessage == null)
+              TextButton(
+                onPressed: _isLoading ? null : _saveOrder,
+                child: Text(
+                  'Сохранить',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: _isLoading
+                        ? Colors.grey
+                        : const Color(0xFF2196F3),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
                 ),
               ),
-            ),
           ],
         ),
-        body: _isLoadingData
-            ? const Center(child: CircularProgressIndicator())
-            : _buildBody(),
+        body: _buildBody(),
       ),
     );
   }
 
   Widget _buildBody() {
+    if (_isLoadingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red[300],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Не удалось загрузить данные',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF41454A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF757575)),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loadAllData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2196F3),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Form(
       key: _formKey,
       child: Stack(
@@ -422,7 +509,8 @@ class _EditOrderPageState extends State<EditOrderPage> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _phoneController,
-                  decoration: _buildInputDecoration(hint: '+7 (___) ___-__-__'),
+                  decoration: _buildInputDecoration(
+                      hint: '+7 (___) ___-__-__'),
                   keyboardType: TextInputType.phone,
                   maxLength: 20,
                   validator: (value) {
@@ -712,5 +800,17 @@ class _EditOrderPageState extends State<EditOrderPage> {
   String _getFullImageUrl(String imagePath) {
     if (imagePath.startsWith('http')) return imagePath;
     return 'http://gj-back.checkedout.kz/storage/$imagePath';
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _streetController.dispose();
+    _houseController.dispose();
+    _apartmentController.dispose();
+    _phoneController.dispose();
+    super.dispose();
   }
 }

@@ -203,17 +203,21 @@ class _OrderClientPageState extends State<OrderClientPage> {
     }
   }
 
-  void _editOrder() {
-    if (_order == null) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            EditOrderPage(order: _order!, onOrderUpdated: _loadOrderData),
+void _editOrder() {
+  if (_order == null) return;
+  
+  final orderId = _order!['id'].toString();
+  
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => EditOrderPage(
+        orderId: orderId,
+        onOrderUpdated: _loadOrderData,
       ),
-    );
-  }
+    ),
+  );
+}
   Future<void> _publishOrder() async {
     try {
       _showCustomSnackBar(message: 'Публикация заказа...', isSuccess: true);
