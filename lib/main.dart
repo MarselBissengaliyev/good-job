@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
-import 'package:flutter_application_1/screens/edit_profile_page.dart';
-import 'package:flutter_application_1/screens/home_page.dart';
+import 'package:goodjob/screens/account_page.dart';
+import 'package:goodjob/screens/edit_profile_page.dart';
+import 'package:goodjob/screens/home_page.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'role_provider.dart';
 import 'services/api_service.dart';
@@ -67,6 +68,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// lib/main.dart (обновленный AuthChecker)
 class AuthChecker extends StatefulWidget {
   const AuthChecker({super.key});
 
@@ -83,6 +85,16 @@ class _AuthCheckerState extends State<AuthChecker> {
 
   Future<void> _checkAuth() async {
     try {
+      // Проверяем авторизацию с возможным обновлением токена
+      final isLoggedIn = await AuthService.isLoggedIn();
+      
+      if (!isLoggedIn) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/registration');
+        }
+        return;
+      }
+
       final role = await _getUserRole();
 
       if (mounted) {
@@ -105,7 +117,14 @@ class _AuthCheckerState extends State<AuthChecker> {
       final profileResponse = await ApiService.getProfile();
       final activeMode = profileResponse['data']['active_mode'] as String;
       await AuthService.saveUserRole(activeMode);
-
+      
+      // Сохраняем ID пользователя
+      final userId = profileResponse['data']['id']?.toString();
+      if (userId != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_id', userId);
+      }
+      
       return activeMode;
     } catch (e) {
       rethrow;

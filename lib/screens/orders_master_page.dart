@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_application_1/custom_bottom_navbar.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
-import 'package:flutter_application_1/screens/order_client_page.dart'; // Добавлен импорт
-import 'package:flutter_application_1/services/api_service.dart';
-import 'package:flutter_application_1/services/common/profile_api.dart';
+import 'package:goodjob/custom_bottom_navbar.dart';
+import 'package:goodjob/screens/account_page.dart';
+import 'package:goodjob/screens/order_client_page.dart'; // Добавлен импорт
+import 'package:goodjob/services/api_service.dart';
+import 'package:goodjob/services/common/profile_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class OrdersMasterPage extends StatefulWidget {

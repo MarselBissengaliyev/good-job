@@ -1,6 +1,6 @@
 // lib/services/common/profile_api.dart
 
-import 'package:flutter_application_1/services/auth/auth_service.dart';
+import 'package:goodjob/services/auth/auth_service.dart';
 
 import '../api/api_client.dart';
 import '../api/api_logger.dart';

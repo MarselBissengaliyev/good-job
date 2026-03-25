@@ -1,10 +1,9 @@
 // lib/services/api_service.dart (обновленный)
-import 'dart:ffi';
 import 'dart:io';
 
-import 'package:flutter_application_1/models/work-photo.dart';
-import 'package:flutter_application_1/services/api/avatar_api.dart';
-import 'package:flutter_application_1/services/client/order_images_api.dart';
+import 'package:goodjob/models/work-photo.dart';
+import 'package:goodjob/services/api/avatar_api.dart';
+import 'package:goodjob/services/client/order_images_api.dart';
 
 import 'api/api_client.dart';
 import 'auth/auth_api.dart';
@@ -14,6 +13,7 @@ import 'common/profile_api.dart';
 import 'master/categories_api.dart';
 import 'master/work_photos_api.dart';
 import 'orders/orders_api.dart';
+import 'master/master_api.dart';
 
 export 'api/api_client.dart';
 export 'api/api_logger.dart' show ApiLogger;
@@ -35,6 +35,10 @@ class ApiService {
   static final CategoriesApi _categoriesApi = CategoriesApi(client: _client);
   static final WorkPhotosApi _workPhotosApi = WorkPhotosApi(client: _client);
   static final OrdersApi _ordersApi = OrdersApi(client: _client);
+  static final MasterApi _masterApi = MasterApi(
+    client: _client,
+  ); // <-- Добавляем
+
   static final ClientOrdersApi _clientOrdersApi = ClientOrdersApi(
     client: _client,
   );
@@ -42,6 +46,11 @@ class ApiService {
 
   static Future<Map<String, dynamic>> uploadAvatar(File imageFile) {
     return _avatarApi.uploadAvatar(imageFile);
+  }
+
+  // Master методы
+  static Future<Map<String, dynamic>> getMasterById(String masterId) {
+    return _masterApi.getMasterById(masterId);
   }
 
   // Auth методы
@@ -317,4 +326,45 @@ class ApiService {
 
   // Cities методы
   static Future<List<dynamic>> getCities() => _citiesApi.getCities();
+
+  // Master Reviews методы
+  static Future<Map<String, dynamic>> getMasterReviews(String masterId) {
+    return _masterApi.getMasterReviews(masterId);
+  }
+
+  static Future<Map<String, dynamic>> createMasterReview({
+    required String masterId,
+    required int rating,
+    String? comment,
+  }) {
+    return _masterApi.createMasterReview(
+      masterId: masterId,
+      rating: rating,
+      comment: comment,
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateMasterReview({
+    required String masterId,
+    required String reviewId,
+    int? rating,
+    String? comment,
+  }) {
+    return _masterApi.updateMasterReview(
+      masterId: masterId,
+      reviewId: reviewId,
+      rating: rating,
+      comment: comment,
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteMasterReview({
+    required String masterId,
+    required String reviewId,
+  }) {
+    return _masterApi.deleteMasterReview(
+      masterId: masterId,
+      reviewId: reviewId,
+    );
+  }
 }

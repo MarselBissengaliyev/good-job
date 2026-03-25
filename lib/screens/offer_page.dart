@@ -1,20 +1,22 @@
-// lib/screens/price_page.dart
+// lib/screens/offer_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import 'package:goodjob/custom_bottom_navbar.dart';
 import 'package:goodjob/screens/account_page.dart';
 import 'package:goodjob/services/api_service.dart';
 import 'package:goodjob/services/page_service.dart';
 import 'package:goodjob/models/page_model.dart';
-import 'package:goodjob/widgets/html_table_widget.dart';
+import 'package:goodjob/widgets/html_content_widget.dart';
 
-class PricePage extends StatefulWidget {
+class OfferPage extends StatefulWidget {
+  const OfferPage({super.key});
+
   @override
-  _PricePageState createState() => _PricePageState();
+  State<OfferPage> createState() => _OfferPageState();
 }
 
-class _PricePageState extends State<PricePage>
+class _OfferPageState extends State<OfferPage>
     with SingleTickerProviderStateMixin {
   final PageService _pageService = PageService();
   late Future<PageModel> _pageFuture;
@@ -83,7 +85,7 @@ class _PricePageState extends State<PricePage>
     });
 
     try {
-      final page = await _pageService.getPageBySlug('price').timeout(
+      final page = await _pageService.getPageBySlug('public-offer').timeout(
         const Duration(seconds: 10),
         onTimeout: () => throw TimeoutException('Превышено время ожидания'),
       );
@@ -119,7 +121,7 @@ class _PricePageState extends State<PricePage>
       _loadUserProfile();
 
       // Обновляем страницу
-      final page = await _pageService.getPageBySlug('price').timeout(
+      final page = await _pageService.getPageBySlug('public-offer').timeout(
         const Duration(seconds: 10),
         onTimeout: () => throw TimeoutException('Превышено время ожидания'),
       );
@@ -194,7 +196,7 @@ class _PricePageState extends State<PricePage>
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
-            'Прайс-лист',
+            'Публичная оферта',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -218,31 +220,7 @@ class _PricePageState extends State<PricePage>
               ),
             ],
           ),
-        ),
-        bottomNavigationBar: _accountTypeForNavBar == null
-            ? null
-            : SafeArea(
-                top: false,
-                minimum: const EdgeInsets.only(bottom: 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFAFAFA),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 12,
-                        offset: const Offset(0, -4),
-                        spreadRadius: -2,
-                      ),
-                    ],
-                  ),
-                  child: CustomBottomNavBar(
-                    activeItem: NavItem.price,
-                    accountType: _accountTypeForNavBar!,
-                  ),
-                ),
-              ),
-      ),
+        ),),
     );
   }
 
@@ -283,7 +261,7 @@ class _PricePageState extends State<PricePage>
                   children: [
                     // Заголовок (если есть)
                     if (_cachedPage!.name.isNotEmpty &&
-                        _cachedPage!.name != 'Прайс-лист')
+                        _cachedPage!.name != 'Публичная оферта')
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
@@ -321,12 +299,9 @@ class _PricePageState extends State<PricePage>
                         ),
                       ),
 
-                    // HTML контент (таблица)
-                    Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: HtmlTableWidget(
-                        htmlContent: _cachedPage!.content,
-                      ),
+                    // HTML контент
+                    HtmlContentWidget(
+                      htmlContent: _cachedPage!.content,
                     ),
 
                     // Индикатор обновления (если идет рефреш)
@@ -357,6 +332,9 @@ class _PricePageState extends State<PricePage>
             _buildUpdateInfo(),
 
             const SizedBox(height: 20),
+
+            // Дополнительная информация о документе
+            _buildDocumentInfo(),
           ],
         ),
       );
@@ -371,7 +349,7 @@ class _PricePageState extends State<PricePage>
         // Скелетон основной карточки
         Container(
           width: double.infinity,
-          height: 300,
+          height: 400,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
@@ -391,7 +369,7 @@ class _PricePageState extends State<PricePage>
               children: [
                 // Заголовок скелетона
                 Container(
-                  width: 150,
+                  width: 200,
                   height: 24,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade200,
@@ -399,35 +377,28 @@ class _PricePageState extends State<PricePage>
                   ),
                 ),
                 const SizedBox(height: 20),
-                // Строки таблицы
-                for (int i = 0; i < 5; i++) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 1,
-                        child: Container(
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
-                    ],
+                // Строки текста
+                for (int i = 0; i < 8; i++) ...[
+                  Container(
+                    width: double.infinity,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
-                  if (i < 4) const SizedBox(height: 16),
+                  if (i < 7) const SizedBox(height: 12),
                 ],
+                const SizedBox(height: 16),
+                // Полоска поменьше
+                Container(
+                  width: 150,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
               ],
             ),
           ),
@@ -439,6 +410,22 @@ class _PricePageState extends State<PricePage>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Скелетон доп информации
+        Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.02),
@@ -522,6 +509,67 @@ class _PricePageState extends State<PricePage>
     );
   }
 
+  Widget _buildDocumentInfo() {
+    if (_cachedPage == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.gavel_outlined,
+              size: 16,
+              color: Color(0xFF61666B),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Юридическая информация',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF8A8D90),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Данный документ является официальной публичной офертой и регулируется законодательством Республики Казахстан',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF1D2125),
+                    fontFamily: 'Plus Jakarta Sans',
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorWidget() {
     return Center(
       child: Column(
@@ -548,7 +596,7 @@ class _PricePageState extends State<PricePage>
           ),
           const SizedBox(height: 24),
           const Text(
-            'Не удалось загрузить прайс-лист',
+            'Не удалось загрузить документ',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -634,7 +682,7 @@ class _PricePageState extends State<PricePage>
       return 'Сервер не отвечает. Попробуйте позже';
     }
     if (errorStr.contains('404')) {
-      return 'Страница не найдена';
+      return 'Документ не найден';
     }
     if (errorStr.contains('500')) {
       return 'Ошибка на сервере. Попробуйте позже';

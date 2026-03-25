@@ -1,4 +1,6 @@
 // lib/services/auth/auth_api.dart
+import 'package:goodjob/services/auth/auth_service.dart';
+
 import '../api/api_client.dart';
 import '../api/api_logger.dart';
 
@@ -53,6 +55,7 @@ class AuthApi {
     }
   }
 
+  // lib/services/auth/auth_api.dart - исправленный confirmPhone
   Future<Map<String, dynamic>> confirmPhone({
     required String telephone,
     required String code,
@@ -66,6 +69,21 @@ class AuthApi {
     try {
       final response = await _client.post(url, body: body);
       ApiLogger.logResponse(200, response);
+
+      // ВАЖНО: Сохраняем токены при успешной авторизации
+      if (response['access_token'] != null) {
+        await AuthService.saveToken(response['access_token']);
+
+        if (response['ttl'] != null) {
+          await AuthService.saveTokenExpiry(response['ttl']);
+        }
+
+        // Если API вернет refresh_token (когда бэкендеры добавят)
+        if (response['refresh_token'] != null) {
+          await AuthService.saveRefreshToken(response['refresh_token']);
+        }
+      }
+
       return response;
     } catch (e) {
       ApiLogger.logError(e);
@@ -102,12 +120,12 @@ class AuthApi {
       final client = ApiClient(); // без токена
       final response = await client.get(url);
       ApiLogger.logResponse(200, response);
-      
+
       final code = response['data']?['code']?.toString();
       if (code != null) {
         return code;
       }
-      
+
       return null;
     } catch (e) {
       ApiLogger.logError(e);

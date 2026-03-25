@@ -2,11 +2,12 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_application_1/custom_bottom_navbar.dart';
-import 'package:flutter_application_1/models/work-photo.dart';
-import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
-import 'package:flutter_application_1/screens/edit_profile_page.dart';
-import 'package:flutter_application_1/screens/help_page.dart';
+import 'package:goodjob/custom_bottom_navbar.dart';
+import 'package:goodjob/models/work-photo.dart';
+import 'package:goodjob/models/master_review.dart';
+import 'package:goodjob/screens/edit_portfolio_master_page.dart';
+import 'package:goodjob/screens/edit_profile_page.dart';
+import 'package:goodjob/screens/help_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_service.dart';
@@ -33,6 +34,12 @@ class _AccountPageState extends State<AccountPage> {
   dynamic _activeMode;
   List<dynamic> categories = [];
   bool isLoadingCategories = false;
+  
+  // Новые переменные для отзывов
+  List<MasterReview> _reviews = [];
+  bool _isLoadingReviews = false;
+  double _averageRating = 0.0;
+  int _totalReviews = 0;
 
   @override
   void initState() {
@@ -134,7 +141,7 @@ class _AccountPageState extends State<AccountPage> {
           print('Категории мастера: ${userData?['categories']}');
 
           if (_isMaster) {
-            _loadMasterWorks();
+            _loadMasterWorks(); // Этот метод теперь загружает и отзывы
           }
 
           isLoading = false;
@@ -164,10 +171,51 @@ class _AccountPageState extends State<AccountPage> {
           print('✅ Загружено ${portfolioImages.length} работ мастера');
         });
       }
+      
+      // Загружаем отзывы после загрузки работ
+      await _loadMasterReviews();
+      
     } catch (e) {
       if (mounted) {
         setState(() => isLoadingWorks = false);
         print('❌ Ошибка загрузки работ мастера: $e');
+      }
+    }
+  }
+
+  Future<void> _loadMasterReviews() async {
+    if (!mounted || !_isMaster || userData == null) return;
+
+    setState(() {
+      _isLoadingReviews = true;
+    });
+
+    try {
+      final masterId = userData!['id'].toString();
+      final response = await ApiService.getMasterReviews(masterId);
+      
+      if (response['data'] != null) {
+        final List<dynamic> reviewsData = response['data'];
+        setState(() {
+          _reviews = MasterReview.fromJsonList(reviewsData);
+          _totalReviews = _reviews.length;
+          
+          // Вычисляем средний рейтинг
+          if (_reviews.isNotEmpty) {
+            final sum = _reviews.fold(0, (prev, review) => prev + review.rating);
+            _averageRating = sum / _reviews.length;
+          } else {
+            _averageRating = 0.0;
+          }
+        });
+      }
+    } catch (e) {
+      print('Error loading reviews: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingReviews = false;
+        });
       }
     }
   }
@@ -207,6 +255,10 @@ class _AccountPageState extends State<AccountPage> {
         _loadMasterWorks();
       }
     });
+  }
+
+  String _formatDate(String dateString) {
+    return ApiService.formatDateTime(dateString);
   }
 
   @override
@@ -447,12 +499,38 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               const SizedBox(height: 24),
+              
+              // Категории
               _buildCategorySelector(),
               const SizedBox(height: 20),
+              
+              // Социальные сети
               _buildSocialLinks(),
               const SizedBox(height: 20),
+              
+              // Подписка
               _buildSubscriptionBlock(),
               const SizedBox(height: 24),
+              
+              // Статистика отзывов
+              _buildReviewsStats(),
+              const SizedBox(height: 20),
+              
+              // Список отзывов
+              const Text(
+                'Все отзывы',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D2125),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildReviewsList(),
+              const SizedBox(height: 24),
+              
+              // Мои работы
               _buildMyWorksSection(),
               const SizedBox(height: 80),
             ],
@@ -1097,6 +1175,7 @@ class _AccountPageState extends State<AccountPage> {
                   children: [
                     _buildSubscriptionFeature('Публикация услуг'),
                     _buildSubscriptionFeature('Просмотр номеров'),
+                    _buildSubscriptionFeature('Больше заказов'),
                   ],
                 ),
               ),
@@ -1124,7 +1203,11 @@ class _AccountPageState extends State<AccountPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F4FF),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFE8F4FF), Color(0xFFD4E9FF)],
+        ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFBBDEFB), width: 1),
       ),
@@ -1164,6 +1247,21 @@ class _AccountPageState extends State<AccountPage> {
               ],
             ),
           ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              'Активно',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF4CAF50),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1183,6 +1281,346 @@ class _AccountPageState extends State<AccountPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildReviewsStats() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Отзывы клиентов',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          Row(
+            children: [
+              // Крупная цифра рейтинга
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF9E7),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.amber.withOpacity(0.3),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _averageRating.toStringAsFixed(1),
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF41454A),
+                        ),
+                      ),
+                      const Text(
+                        'из 5',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF8A8D90),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              
+              // Статистика по звездам
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildRatingBar(5, _getRatingPercentage(5)),
+                    _buildRatingBar(4, _getRatingPercentage(4)),
+                    _buildRatingBar(3, _getRatingPercentage(3)),
+                    _buildRatingBar(2, _getRatingPercentage(2)),
+                    _buildRatingBar(1, _getRatingPercentage(1)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Общее количество отзывов
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Всего отзывов:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF5F6368),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+                Text(
+                  '$_totalReviews',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0F7EDE),
+                    fontFamily: 'Plus Jakarta Sans',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingBar(int stars, double percentage) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 30,
+            child: Text(
+              '$stars ★',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF41454A),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: percentage,
+                backgroundColor: const Color(0xFFEEEEEE),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+                minHeight: 6,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 35,
+            child: Text(
+              '${(percentage * 100).toInt()}%',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF8A8D90),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _getRatingPercentage(int stars) {
+    if (_reviews.isEmpty) return 0;
+    
+    final count = _reviews.where((r) => r.rating == stars).length;
+    return count / _reviews.length;
+  }
+
+  Widget _buildReviewsList() {
+    if (_isLoadingReviews) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F7EDE)),
+          ),
+        ),
+      );
+    }
+
+    if (_reviews.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE8E8E8)),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.rate_review_outlined,
+              size: 64,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Пока нет отзывов',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF5F6368),
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Когда клиенты начнут оставлять отзывы, они появятся здесь',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _reviews.length,
+        separatorBuilder: (_, __) => const Divider(height: 24),
+        itemBuilder: (context, index) {
+          final review = _reviews[index];
+          
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFFE0E0E0),
+                    child: Text(
+                      review.client.firstname.isNotEmpty 
+                          ? review.client.firstname[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF41454A),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          review.client.fullName,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                        if (review.createdAt != null)
+                          Text(
+                            _formatDate(review.createdAt!.toIso8601String()),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF9E9E9E),
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.star,
+                          size: 14,
+                          color: Colors.amber,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          review.rating.toString(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF41454A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (review.comment != null && review.comment!.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9F9F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    review.comment!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF5F6368),
+                      fontFamily: 'Plus Jakarta Sans',
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
     );
   }
 

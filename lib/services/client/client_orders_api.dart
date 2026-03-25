@@ -1,6 +1,6 @@
 // lib/services/client/client_orders_api.dart
 import 'dart:io';
-import 'package:flutter_application_1/services/client/order_images_api.dart';
+import 'package:goodjob/services/client/order_images_api.dart';
 import '../api/api_client.dart';
 import '../api/api_logger.dart';
 

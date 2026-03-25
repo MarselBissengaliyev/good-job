@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_application_1/custom_bottom_navbar.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
-import 'package:flutter_application_1/services/auth/auth_service.dart';
+import 'package:goodjob/custom_bottom_navbar.dart';
+import 'package:goodjob/screens/account_page.dart';
+import 'package:goodjob/services/auth/auth_service.dart';
 
 // Добавьте этот импорт для навигации
 import 'edit_portfolio_master_page.dart'; // Раскомментируйте и укажите правильный путь

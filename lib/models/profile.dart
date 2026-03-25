@@ -1,5 +1,5 @@
 // models/profile.dart
-import 'package:flutter_application_1/models/city.dart';
+import 'package:goodjob/models/city.dart';
 
 class Profile {
   final String firstname;

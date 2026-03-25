@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
-import 'package:flutter_application_1/screens/add_order_client_page.dart';
-import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
-import 'package:flutter_application_1/screens/my_orders_client_page.dart';
-import 'package:flutter_application_1/screens/orders_master_page.dart';
-import 'package:flutter_application_1/screens/price_page.dart';
+import 'package:goodjob/screens/account_page.dart';
+import 'package:goodjob/screens/add_order_client_page.dart';
+import 'package:goodjob/screens/edit_portfolio_master_page.dart';
+import 'package:goodjob/screens/my_orders_client_page.dart';
+import 'package:goodjob/screens/orders_master_page.dart';
+import 'package:goodjob/screens/price_page.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
   final NavItem activeItem;

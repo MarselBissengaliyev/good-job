@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_application_1/custom_bottom_navbar.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
-import 'package:flutter_application_1/screens/edit_order_page.dart';
-import 'package:flutter_application_1/screens/interested_in_order_page.dart';
+import 'package:goodjob/custom_bottom_navbar.dart';
+import 'package:goodjob/screens/account_page.dart';
+import 'package:goodjob/screens/edit_order_page.dart';
+import 'package:goodjob/screens/interested_in_order_page.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_application_1/services/api_service.dart';
+import 'package:goodjob/services/api_service.dart';
 
 class OrderClientPage extends StatefulWidget {
   final String orderId;

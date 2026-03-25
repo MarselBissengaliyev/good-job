@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_application_1/custom_bottom_navbar.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
-import 'package:flutter_application_1/screens/edit_portfolio_master_page.dart';
-import 'package:flutter_application_1/services/auth/auth_service.dart';
+import 'package:goodjob/custom_bottom_navbar.dart';
+import 'package:goodjob/screens/account_page.dart';
+import 'package:goodjob/screens/edit_portfolio_master_page.dart';
+import 'package:goodjob/services/auth/auth_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../services/api_service.dart';
@@ -716,12 +716,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
           await _showVerificationModal();
         }
       } else {
-        setState(() => _isSaving = false);
-        _showSuccessSnackBar('Профиль успешно обновлен');
-        if (mounted) {
-          Navigator.pop(context, true);
-        }
-      }
+  setState(() => _isSaving = false);
+  _showSuccessSnackBar('Профиль успешно обновлен');
+  if (mounted) {
+    // Проверяем, можем ли мы вернуться назад
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context, true);
+    } else {
+      // Если не можем, идем на главный экран
+      Navigator.pushReplacementNamed(
+        context,
+        _currentProfileMode == ProfileMode.master 
+            ? '/account-master' 
+            : '/account-client',
+      );
+    }
+  }
+}
     } catch (e) {
       setState(() => _isSaving = false);
       _showErrorSnackBar('Ошибка обновления профиля: $e');
@@ -1420,22 +1431,35 @@ class _EditProfilePageState extends State<EditProfilePage> {
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          leading: IconButton(
-            icon: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Color(0xFF41454A),
-                size: 20,
-              ),
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
+  leading: IconButton(
+  icon: Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(
+      color: const Color(0xFFF5F5F5),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: const Icon(
+      Icons.arrow_back_ios_new_rounded,
+      color: Color(0xFF41454A),
+      size: 20,
+    ),
+  ),
+  onPressed: () {
+    // Проверяем, можем ли мы вернуться назад
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      // Если не можем, идем на соответствующий экран аккаунта
+      Navigator.pushReplacementNamed(
+        context,
+        _currentProfileMode == ProfileMode.master 
+            ? '/account-master' 
+            : '/account-client',
+      );
+    }
+  },
+),
           centerTitle: true,
           title: const Text(
             'Редактировать профиль',

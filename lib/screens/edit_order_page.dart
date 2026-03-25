@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_application_1/services/api_service.dart';
+import 'package:goodjob/services/api_service.dart';
 
 class EditOrderPage extends StatefulWidget {
   final String orderId; // Теперь принимаем только ID

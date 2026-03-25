@@ -1,94 +1,112 @@
 // lib/widgets/html_content_widget.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:webview_flutter/webview_flutter.dart'; // Добавьте зависимость в pubspec.yaml
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 
-class HtmlContentWidget extends StatefulWidget {
+class HtmlContentWidget extends StatelessWidget {
   final String htmlContent;
+  final Function(double height)? onHeightChanged;
 
-  const HtmlContentWidget({Key? key, required this.htmlContent}) : super(key: key);
-
-  @override
-  _HtmlContentWidgetState createState() => _HtmlContentWidgetState();
-}
-
-class _HtmlContentWidgetState extends State<HtmlContentWidget> {
-  late final WebViewController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFFFAFAFA))
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (request) {
-            // Открываем ссылки во внешнем браузере
-            if (request.url.startsWith('http')) {
-              // Здесь можно добавить открытие ссылок в браузере
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadHtmlString(_getFullHtml());
-  }
-
-  String _getFullHtml() {
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <style>
-            body {
-                font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-                margin: 0;
-                padding: 0;
-                color: #41454A;
-                background-color: #FAFAFA;
-                line-height: 1.5;
-            }
-            img {
-                max-width: 100%;
-                height: auto;
-                border-radius: 12px;
-            }
-            h1 { font-size: 24px; font-weight: 600; }
-            h2 { font-size: 20px; font-weight: 600; }
-            h3 { font-size: 18px; font-weight: 600; }
-            a { color: #41454A; text-decoration: underline; }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 16px 0;
-            }
-            td, th {
-                padding: 12px;
-                border: 1px solid #E0E0E0;
-                text-align: left;
-            }
-            th {
-                background-color: #F0F0F0;
-                font-weight: 600;
-            }
-        </style>
-    </head>
-    <body>
-        ${widget.htmlContent}
-    </body>
-    </html>
-    ''';
-  }
+  const HtmlContentWidget({
+    Key? key,
+    required this.htmlContent,
+    this.onHeightChanged,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6, // Настройте высоту по необходимости
-      child: WebViewWidget(controller: _controller),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      child: HtmlWidget(
+        htmlContent,
+        textStyle: const TextStyle(
+          fontFamily: 'Plus Jakarta Sans',
+          color: Color(0xFF41454A),
+          fontSize: 14,
+          height: 1.5,
+        ),
+        onLoadingBuilder: (context, element, loadingProgress) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Color(0xFF0F7EDE),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        onErrorBuilder: (context, element, error) {
+          return Text(
+            'Ошибка загрузки контента: $error',
+            style: const TextStyle(color: Colors.red),
+          );
+        },
+        renderMode: RenderMode.column,
+        customStylesBuilder: (element) {
+          if (element.localName == 'img') {
+            return {
+              'max-width': '100%',
+              'height': 'auto',
+              'border-radius': '12px',
+            };
+          }
+          if (element.localName == 'table') {
+            return {
+              'width': '100%',
+              'border-collapse': 'collapse',
+              'margin': '16px 0',
+            };
+          }
+          if (element.localName == 'td' || element.localName == 'th') {
+            return {
+              'padding': '12px',
+              'border': '1px solid #E0E0E0',
+              'text-align': 'left',
+            };
+          }
+          if (element.localName == 'th') {
+            return {
+              'background-color': '#F0F0F0',
+              'font-weight': '600',
+            };
+          }
+          if (element.localName == 'a') {
+            return {
+              'color': '#0F7EDE',
+              'text-decoration': 'underline',
+            };
+          }
+          if (element.localName == 'h1') {
+            return {
+              'font-size': '24px',
+              'font-weight': '600',
+              'margin': '0 0 16px 0',
+            };
+          }
+          if (element.localName == 'h2') {
+            return {
+              'font-size': '20px',
+              'font-weight': '600',
+              'margin': '0 0 12px 0',
+            };
+          }
+          if (element.localName == 'h3') {
+            return {
+              'font-size': '18px',
+              'font-weight': '600',
+              'margin': '0 0 8px 0',
+            };
+          }
+          return null;
+        },
+      ),
     );
   }
 }

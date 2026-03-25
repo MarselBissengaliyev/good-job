@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/login_page.dart';
+import 'package:goodjob/screens/login_page.dart';
+import 'package:goodjob/screens/offer_page.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart'; // Добавить импорт
 import 'package:provider/provider.dart';
 
@@ -49,17 +50,17 @@ class _Registration3PageState extends State<Registration3Page> {
   String _getCleanPhoneNumber(String maskedNumber) {
     // Удаляем все нецифровые символы
     String cleanNumber = maskedNumber.replaceAll(RegExp(r'[^0-9]'), '');
-    
+
     // Если номер начинается с 8 (российский формат), заменяем на 7
     if (cleanNumber.startsWith('8') && cleanNumber.length == 11) {
       cleanNumber = '7${cleanNumber.substring(1)}';
     }
-    
+
     // Добавляем + в начало, если его нет
     if (!cleanNumber.startsWith('7')) {
       cleanNumber = '7$cleanNumber';
     }
-    
+
     return '+$cleanNumber';
   }
 
@@ -260,7 +261,8 @@ class _Registration3PageState extends State<Registration3Page> {
                     fieldName = 'Телефон';
                     // Дополнительная информация для телефона
                     if (errorText.contains('Некорректный номер')) {
-                      errorText += '\nПример правильного формата: +7 (777) 123-45-67';
+                      errorText +=
+                          '\nПример правильного формата: +7 (777) 123-45-67';
                     }
                     break;
                   default:
@@ -367,7 +369,9 @@ class _Registration3PageState extends State<Registration3Page> {
         lastname: lastname,
         telephone: phoneNumber, // Используем очищенный номер
         cityId: selectedCityId!,
-        activeMode: roleProvider.selectedRole == UserRole.master ? 'master' : 'client',
+        activeMode: roleProvider.selectedRole == UserRole.master
+            ? 'master'
+            : 'client',
       );
 
       int ttl = 60;
@@ -840,7 +844,9 @@ class _Registration3PageState extends State<Registration3Page> {
                                     TextField(
                                       controller: phoneController,
                                       focusNode: _phoneFocusNode,
-                                      inputFormatters: [maskFormatter], // Применяем маску
+                                      inputFormatters: [
+                                        maskFormatter,
+                                      ], // Применяем маску
                                       onChanged: (_) {
                                         setState(() {
                                           if (_fieldErrors != null) {
@@ -890,14 +896,17 @@ class _Registration3PageState extends State<Registration3Page> {
                                           fontSize: 12,
                                           color: Colors.grey,
                                         ),
-                                        suffixIcon: phoneController.text.isNotEmpty
+                                        suffixIcon:
+                                            phoneController.text.isNotEmpty
                                             ? IconButton(
                                                 icon: const Icon(
                                                   Icons.close,
                                                   size: 18,
                                                   color: Color(0xFF9AA0A6),
                                                 ),
-                                                onPressed: () => setState(() => phoneController.clear()),
+                                                onPressed: () => setState(
+                                                  () => phoneController.clear(),
+                                                ),
                                               )
                                             : null,
                                       ),
@@ -907,7 +916,7 @@ class _Registration3PageState extends State<Registration3Page> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    
+
                                     // Подсказка о формате номера
                                     Row(
                                       children: [
@@ -922,7 +931,9 @@ class _Registration3PageState extends State<Registration3Page> {
                                             'Введите номер в формате: +7 (777) 777-77-77',
                                             style: TextStyle(
                                               fontSize: 11,
-                                              color: _getFieldError('Телефон') != null
+                                              color:
+                                                  _getFieldError('Телефон') !=
+                                                      null
                                                   ? Colors.red
                                                   : const Color(0xFF9AA0A6),
                                               fontFamily: 'Plus Jakarta Sans',
@@ -1004,7 +1015,12 @@ class _Registration3PageState extends State<Registration3Page> {
                                 GestureDetector(
                                   onTap: () {
                                     print('[DEBUG] Открытие договора офферты');
-                                    // TODO: Открыть договор
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => OfferPage(),
+                                      ),
+                                    );
                                   },
                                   child: const Text(
                                     'Договор публичной офферты',

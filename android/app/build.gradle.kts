@@ -14,7 +14,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.good_job"
+    namespace = "kz.softlance.goodjob"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.good_job"
+        applicationId = "kz.softlance.goodjob"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -53,6 +53,21 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+}
+
+tasks.whenTaskAdded {
+    if (name == "assembleRelease") {
+        doLast {
+            val buildDir = layout.buildDirectory.asFile.get()
+            val oldFile = File(buildDir, "outputs/flutter-apk/app-release.apk")
+            val newFile = File(buildDir, "outputs/flutter-apk/GoodJob.${android.defaultConfig.versionName}.apk")
+            
+            if (oldFile.exists()) {
+                oldFile.copyTo(newFile, overwrite = true)
+                println("--- APK RENAMED TO: ${newFile.name} ---")
+            }
         }
     }
 }

@@ -1,8 +1,8 @@
 // lib/screens/help_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_application_1/custom_bottom_navbar.dart';
-import 'package:flutter_application_1/screens/account_page.dart';
+import 'package:goodjob/custom_bottom_navbar.dart';
+import 'package:goodjob/screens/account_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HelpPage extends StatefulWidget {
