@@ -116,6 +116,39 @@ class OrdersApi {
     }
   }
 
+    // Новый метод: публикация заказа (status -> active)
+  Future<void> publishOrder(String orderId) async {
+    const method = 'POST';
+    final url = '/orders/$orderId/publish';
+
+    ApiLogger.logRequest(method, url);
+
+    try {
+      final response = await _client.post(url);
+      ApiLogger.logResponse(200, response);
+    } catch (e) {
+      ApiLogger.logError(e);
+      rethrow;
+    }
+  }
+
+  // Новый метод: отзыв заказа (status -> canceled)
+  Future<void> revokeOrder(String orderId) async {
+    const method = 'POST';
+    final url = '/orders/$orderId/revoke';
+
+    ApiLogger.logRequest(method, url);
+
+    try {
+      final response = await _client.post(url);
+      ApiLogger.logResponse(200, response);
+    } catch (e) {
+      ApiLogger.logError(e);
+      rethrow;
+    }
+  }
+
+
   Future<void> markOrderAsViewed(String orderId) async {
     try {
       await _client.post('/orders/$orderId/view');

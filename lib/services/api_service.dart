@@ -278,6 +278,13 @@ class ApiService {
   static Future<void> deleteOrder(int orderId) =>
       _ordersApi.deleteOrder(orderId);
 
+  // Новые методы для управления статусами заказов
+  static Future<void> publishOrder(String orderId) =>
+      _ordersApi.publishOrder(orderId);
+
+  static Future<void> revokeOrder(String orderId) =>
+      _ordersApi.revokeOrder(orderId);
+
   static Future<void> changeOrderStatus({
     required String orderId,
     required String status,

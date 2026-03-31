@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:provider/provider.dart';
 
+import '../localization/app_localizations.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import 'registration_4_page.dart';
 import 'registration_page.dart';
@@ -12,12 +15,14 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
   final TextEditingController _phoneController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
   bool _phoneHasError = false;
   Map<String, dynamic>? _fieldErrors;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   // Создаем форматтер маски для телефона
   final maskFormatter = MaskTextInputFormatter(
@@ -26,11 +31,31 @@ class _LoginPageState extends State<LoginPage> {
     type: MaskAutoCompletionType.lazy,
   );
 
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
   // Получить сообщение об ошибке для конкретного поля
-  String? _getFieldError(String fieldName) {
+  String? _getFieldError(String fieldName, AppLocalizations appLocalizations) {
     if (_fieldErrors == null) return null;
 
-    // Маппинг русских названий полей на английские (как в API)
     String apiFieldName;
     switch (fieldName) {
       case 'Телефон':
@@ -40,31 +65,56 @@ class _LoginPageState extends State<LoginPage> {
         apiFieldName = fieldName.toLowerCase();
     }
 
-    return _fieldErrors![apiFieldName];
+    final error = _fieldErrors![apiFieldName];
+    if (error == null) return null;
+
+    // Переводим ошибки на текущий язык
+    if (error.contains('validation.phone') || error.contains('Некорректный')) {
+      return appLocalizations.translate('invalid_phone');
+    } else if (error.contains('validation.required')) {
+      return appLocalizations.translate('field_required');
+    } else if (error.contains('User not found') || error.contains('не найден')) {
+      return appLocalizations.translate('user_not_found');
+    }
+    
+    return error;
   }
 
   // Виджет для отображения ошибки поля
-  Widget _buildFieldError(String fieldName) {
-    final error = _getFieldError(fieldName);
+  Widget _buildFieldError(String fieldName, AppLocalizations appLocalizations) {
+    final error = _getFieldError(fieldName, appLocalizations);
     if (error == null) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 4.0, left: 4.0),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 16),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              error,
-              style: const TextStyle(
-                color: Colors.red,
-                fontSize: 12,
-                fontFamily: 'Plus Jakarta Sans',
+    return TweenAnimationBuilder(
+      duration: const Duration(milliseconds: 300),
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, double value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 10 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4.0, left: 4.0),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 16),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                error,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -72,15 +122,12 @@ class _LoginPageState extends State<LoginPage> {
   // Функция для очистки номера телефона от всех символов кроме цифр
   String _getCleanPhoneNumber() {
     String maskedNumber = _phoneController.text;
-    // Удаляем все нецифровые символы
     String cleanNumber = maskedNumber.replaceAll(RegExp(r'[^0-9]'), '');
 
-    // Если номер начинается с 8 (российский формат), заменяем на +7
     if (cleanNumber.startsWith('8') && cleanNumber.length == 11) {
       cleanNumber = '7${cleanNumber.substring(1)}';
     }
 
-    // Добавляем + в начало, если его нет
     if (!cleanNumber.startsWith('7')) {
       cleanNumber = '7$cleanNumber';
     }
@@ -89,14 +136,12 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
-    // Получаем очищенный номер телефона
+    final appLocalizations = AppLocalizations.of(context)!;
     String cleanPhone = _getCleanPhoneNumber();
 
-    // Проверяем, что номер содержит достаточно цифр
     if (cleanPhone.length < 12) {
-      // +7 и 10 цифр = 12 символов
       setState(() {
-        _errorMessage = 'Введите корректный номер телефона';
+        _errorMessage = appLocalizations.translate('enter_valid_phone');
         _phoneHasError = true;
       });
       return;
@@ -110,44 +155,30 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      print('[DEBUG] Начало процесса входа...');
-      print('[DEBUG] Телефон (очищенный): $cleanPhone');
-
-      // 1. Отправляем запрос на вход (получение кода)
       final response = await ApiService.login(telephone: cleanPhone);
 
-      print('[DEBUG] Ответ от API логина: $response');
-
-      // Извлекаем TTL кода из ответа
-      int codeTtl = 60; // значение по умолчанию
+      int codeTtl = 60;
       if (response is Map<String, dynamic>) {
         if (response.containsKey('code_ttl')) {
           codeTtl = response['code_ttl'] as int;
         }
       }
 
-      print('[DEBUG] TTL кода: $codeTtl секунд');
-
-      // Переходим на страницу подтверждения кода
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => Registration4Page(
-            phoneNumber: cleanPhone, // Передаем очищенный номер
-            codeTtl: codeTtl,
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Registration4Page(
+              phoneNumber: cleanPhone,
+              codeTtl: codeTtl,
+            ),
           ),
-        ),
-      );
-
-      print('[DEBUG] Переход на страницу подтверждения кода выполнен');
+        );
+      }
     } catch (e) {
-      print('[ERROR] Ошибка при входе: $e');
-
-      // Обрабатываем ошибку API
-      String errorMessage = 'Ошибка при входе';
+      String errorMessage = appLocalizations.translate('login_error');
 
       if (e is Map<String, dynamic>) {
-        // Если это ошибка валидации от API
         if (e['errors'] != null) {
           final errors = e['errors'] as Map<String, dynamic>;
           _fieldErrors = {};
@@ -155,21 +186,19 @@ class _LoginPageState extends State<LoginPage> {
           for (var entry in errors.entries) {
             if (entry.value is List && (entry.value as List).isNotEmpty) {
               String errorText = (entry.value as List).first.toString();
-
-              // Переводим ошибки на русский
+              
               if (errorText.contains('validation.phone')) {
-                errorText = 'Некорректный номер телефона';
+                errorText = appLocalizations.translate('invalid_phone');
               } else if (errorText.contains('validation.required')) {
-                errorText = 'Это поле обязательно для заполнения';
+                errorText = appLocalizations.translate('field_required');
               } else if (errorText.contains('User not found')) {
-                errorText = 'Пользователь не найден';
+                errorText = appLocalizations.translate('user_not_found');
               }
 
               _fieldErrors![entry.key] = errorText;
             }
           }
 
-          // Формируем сообщение об ошибке
           if (_fieldErrors!.isNotEmpty) {
             errorMessage = _fieldErrors!.values.join('\n');
           }
@@ -178,16 +207,31 @@ class _LoginPageState extends State<LoginPage> {
         }
       } else if (e is String) {
         if (e.contains('User not found')) {
-          errorMessage = 'Пользователь не найден';
+          errorMessage = appLocalizations.translate('user_not_found');
         } else {
           errorMessage = e;
         }
       }
 
-      setState(() {
-        _errorMessage = errorMessage;
-        _phoneHasError = true;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = errorMessage;
+          _phoneHasError = true;
+        });
+        
+        // Показываем SnackBar для ошибок
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -199,6 +243,9 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appLocalizations = AppLocalizations.of(context)!;
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
@@ -222,232 +269,272 @@ class _LoginPageState extends State<LoginPage> {
 
             // Форма входа
             Expanded(
-              child: SingleChildScrollView(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'Вход',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-
-                      const Text(
-                        'Введите номер телефона, чтобы войти',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Поле телефона с маской
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: _phoneController,
-                            inputFormatters: [maskFormatter], // Применяем маску
-                            onChanged: (_) {
-                              setState(() {
-                                _phoneHasError = false;
-                                if (_fieldErrors != null) {
-                                  _fieldErrors!.remove('telephone');
-                                }
-                                _errorMessage = null;
-                              });
-                            },
-                            keyboardType: TextInputType.phone,
-                            decoration: InputDecoration(
-                              labelText: 'Телефон',
-                              labelStyle: TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
-                                color: _phoneHasError
-                                    ? Colors.red
-                                    : Colors.grey,
-                              ),
-                              hintText: '+7 (___) ___-__-__',
-                              hintStyle: const TextStyle(
-                                color: Colors.grey,
-                                fontFamily: 'Plus Jakarta Sans',
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.red),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                              helperStyle: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 16,
-                            ),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SingleChildScrollView(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 20),
+                        
+                        // Иконка с телефоном
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            shape: BoxShape.circle,
                           ),
-                          const SizedBox(height: 4),
-                          _buildFieldError('Телефон'),
-                        ],
-                      ),
+                          child: Icon(
+                            Icons.phone_android,
+                            size: 48,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
 
-                      // Общая ошибка
-                      if (_errorMessage != null &&
-                          (_fieldErrors == null || _fieldErrors!.isEmpty))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFEBEE),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.red.shade300),
+                        Text(
+                          appLocalizations.translate('login'),
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+
+                        Text(
+                          appLocalizations.translate('enter_phone_to_login'),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Поле телефона с маской
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                              controller: _phoneController,
+                              inputFormatters: [maskFormatter],
+                              enabled: !_isLoading,
+                              onChanged: (_) {
+                                setState(() {
+                                  _phoneHasError = false;
+                                  if (_fieldErrors != null) {
+                                    _fieldErrors!.remove('telephone');
+                                  }
+                                  _errorMessage = null;
+                                });
+                              },
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration(
+                                labelText: appLocalizations.translate('phone'),
+                                labelStyle: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  color: _phoneHasError ? Colors.red : Colors.grey,
+                                ),
+                                hintText: '+7 (___) ___-__-__',
+                                hintStyle: const TextStyle(
+                                  color: Colors.grey,
+                                  fontFamily: 'Plus Jakarta Sans',
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.phone,
+                                  color: _phoneHasError ? Colors.red : Colors.grey.shade600,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: Colors.blue,
+                                    width: 2,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: Colors.red),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: Colors.red),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                              style: const TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                fontSize: 16,
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'Ошибка',
-                                      style: TextStyle(
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        fontFamily: 'Plus Jakarta Sans',
+                            const SizedBox(height: 4),
+                            _buildFieldError('Телефон', appLocalizations),
+                          ],
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Кнопка входа
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: double.infinity,
+                          height: 55,
+                          child: ElevatedButton(
+                            onPressed: (_isLoading || _getCleanPhoneNumber().length < 12)
+                                ? null
+                                : () => _login(),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        Colors.white,
                                       ),
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 13,
-                                    fontFamily: 'Plus Jakarta Sans',
+                                  )
+                                : Text(
+                                    appLocalizations.translate('login'),
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'Plus Jakarta Sans',
+                                      color: Colors.white,
+                                    ),
                                   ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Разделитель "или"
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                color: Colors.grey.shade300,
+                                thickness: 1,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                appLocalizations.translate('or'),
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontSize: 14,
+                                  color: Colors.grey.shade500,
                                 ),
-                              ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                color: Colors.grey.shade300,
+                                thickness: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 16),
+
+                        // Кнопка регистрации
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: OutlinedButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () {
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const RegistrationPage(),
+                                      ),
+                                    );
+                                  },
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.blue.shade700),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              appLocalizations.translate('register'),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: Colors.blue.shade700,
+                              ),
                             ),
                           ),
                         ),
 
-                      const SizedBox(height: 24),
-
-                      // Кнопка входа
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : () => _login(),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                _getCleanPhoneNumber().length >= 12 &&
-                                    !_isLoading
-                                ? const Color(0xFF0F7EDE)
-                                : const Color(0xFFBABABA),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                        const SizedBox(height: 24),
+                        
+                        // Подсказка
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : const Text(
-                                  'Войти',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  appLocalizations.translate('login_hint'),
                                   style: TextStyle(
-                                    fontSize: 17,
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
                                     fontFamily: 'Plus Jakarta Sans',
-                                    color: Colors.white,
                                   ),
                                 ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      const Text(
-                        'или',
-                        style: TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Кнопка регистрации
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: OutlinedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () {
-                                  print('[DEBUG] Переход к регистрации');
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const RegistrationPage(),
-                                    ),
-                                  );
-                                },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF0F7EDE)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'Зарегистрироваться',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontFamily: 'Plus Jakarta Sans',
-                              color: Color(0xFF0F7EDE),
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-
-                      const SizedBox(height: 24),
-                    ],
+                        
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -456,11 +543,5 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    super.dispose();
   }
 }

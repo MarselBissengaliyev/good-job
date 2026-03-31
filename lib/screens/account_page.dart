@@ -8,8 +8,11 @@ import 'package:goodjob/models/master_review.dart';
 import 'package:goodjob/screens/edit_portfolio_master_page.dart';
 import 'package:goodjob/screens/edit_profile_page.dart';
 import 'package:goodjob/screens/help_page.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../localization/app_localizations.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth/auth_service.dart';
 import 'my_orders_client_page.dart';
@@ -25,7 +28,7 @@ class AccountPage extends StatefulWidget {
   State<AccountPage> createState() => _AccountPageState();
 }
 
-class _AccountPageState extends State<AccountPage> {
+class _AccountPageState extends State<AccountPage> with SingleTickerProviderStateMixin {
   Map<String, dynamic>? userData;
   bool isLoading = true;
   bool isLoadingWorks = false;
@@ -34,17 +37,18 @@ class _AccountPageState extends State<AccountPage> {
   dynamic _activeMode;
   List<dynamic> categories = [];
   bool isLoadingCategories = false;
-  
-  // Новые переменные для отзывов
   List<MasterReview> _reviews = [];
   bool _isLoadingReviews = false;
   double _averageRating = 0.0;
   int _totalReviews = 0;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _initAnimation();
 
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -54,8 +58,21 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  void _initAnimation() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _animationController.forward();
+  }
+
   @override
   void dispose() {
+    _animationController.dispose();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.black,
@@ -66,19 +83,26 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _launchUrl(String url) async {
+    final appLocalizations = AppLocalizations.of(context);
     final Uri uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось открыть ссылку: $url')),
+          SnackBar(
+            content: Text('${appLocalizations?.translate('failed_to_open_link') ?? 'Не удалось открыть ссылку'}: $url'),
+          ),
         );
       }
     }
   }
 
   Future<void> _openSocialLink(String? username, String platform) async {
+    final appLocalizations = AppLocalizations.of(context);
     if (username == null || username.isEmpty) {
-      _showSnackBar('Имя пользователя не указано', isError: true);
+      _showSnackBar(
+        appLocalizations?.translate('username_not_specified') ?? 'Имя пользователя не указано',
+        isError: true,
+      );
       return;
     }
 
@@ -99,7 +123,10 @@ class _AccountPageState extends State<AccountPage> {
     try {
       _launchUrl(url);
     } catch (e) {
-      _showSnackBar('Ошибка при открытии ссылки', isError: true);
+      _showSnackBar(
+        appLocalizations?.translate('error_opening_link') ?? 'Ошибка при открытии ссылки',
+        isError: true,
+      );
     }
   }
 
@@ -122,6 +149,7 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _loadUserProfile() async {
+    final appLocalizations = AppLocalizations.of(context);
     if (!mounted) return;
 
     try {
@@ -131,17 +159,12 @@ class _AccountPageState extends State<AccountPage> {
         setState(() {
           userData = response['data'];
           final activeValue = userData?['activeMode'];
-
           if (activeValue != null) {
             _activeMode = activeValue;
           }
 
-          print('Загружены данные пользователя: $userData');
-          print('Active mode: $_activeMode');
-          print('Категории мастера: ${userData?['categories']}');
-
           if (_isMaster) {
-            _loadMasterWorks(); // Этот метод теперь загружает и отзывы
+            _loadMasterWorks();
           }
 
           isLoading = false;
@@ -150,8 +173,9 @@ class _AccountPageState extends State<AccountPage> {
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки профиля: $e')),
+        _showSnackBar(
+          '${appLocalizations?.translate('error_loading_profile') ?? 'Ошибка загрузки профиля'}: $e',
+          isError: true,
         );
       }
     }
@@ -168,39 +192,32 @@ class _AccountPageState extends State<AccountPage> {
         setState(() {
           portfolioImages = works;
           isLoadingWorks = false;
-          print('✅ Загружено ${portfolioImages.length} работ мастера');
         });
       }
-      
-      // Загружаем отзывы после загрузки работ
       await _loadMasterReviews();
-      
     } catch (e) {
       if (mounted) {
         setState(() => isLoadingWorks = false);
-        print('❌ Ошибка загрузки работ мастера: $e');
       }
     }
   }
 
   Future<void> _loadMasterReviews() async {
+    final appLocalizations = AppLocalizations.of(context);
     if (!mounted || !_isMaster || userData == null) return;
 
-    setState(() {
-      _isLoadingReviews = true;
-    });
+    setState(() => _isLoadingReviews = true);
 
     try {
       final masterId = userData!['id'].toString();
       final response = await ApiService.getMasterReviews(masterId);
-      
+
       if (response['data'] != null) {
         final List<dynamic> reviewsData = response['data'];
         setState(() {
           _reviews = MasterReview.fromJsonList(reviewsData);
           _totalReviews = _reviews.length;
-          
-          // Вычисляем средний рейтинг
+
           if (_reviews.isNotEmpty) {
             final sum = _reviews.fold(0, (prev, review) => prev + review.rating);
             _averageRating = sum / _reviews.length;
@@ -212,11 +229,7 @@ class _AccountPageState extends State<AccountPage> {
     } catch (e) {
       print('Error loading reviews: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingReviews = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingReviews = false);
     }
   }
 
@@ -229,9 +242,8 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   void _navigateToEditProfile() {
+    final appLocalizations = AppLocalizations.of(context);
     ProfileMode mode = _isMaster ? ProfileMode.master : ProfileMode.client;
-
-    print('Навигация на EditProfilePage с режимом: $mode');
 
     Navigator.push(
       context,
@@ -239,9 +251,7 @@ class _AccountPageState extends State<AccountPage> {
     ).then((result) {
       if (mounted) {
         _loadUserProfile();
-        if (_isMaster) {
-          _loadMasterWorks();
-        }
+        if (_isMaster) _loadMasterWorks();
       }
     });
   }
@@ -251,9 +261,7 @@ class _AccountPageState extends State<AccountPage> {
       context,
       MaterialPageRoute(builder: (context) => const EditPortfolioMasterPage()),
     ).then((_) {
-      if (mounted) {
-        _loadMasterWorks();
-      }
+      if (mounted) _loadMasterWorks();
     });
   }
 
@@ -263,6 +271,9 @@ class _AccountPageState extends State<AccountPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appLocalizations = AppLocalizations.of(context);
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -276,9 +287,9 @@ class _AccountPageState extends State<AccountPage> {
           elevation: 0,
           backgroundColor: const Color(0xFFFAFAFA),
           centerTitle: true,
-          title: const Text(
-            'Аккаунт',
-            style: TextStyle(
+          title: Text(
+            appLocalizations?.translate('account') ?? 'Аккаунт',
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
               color: Color(0xFF1D2125),
@@ -286,6 +297,7 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ),
           actions: [
+            _buildLanguageButton(context, languageProvider, appLocalizations),
             IconButton(
               onPressed: () async {
                 await AuthService.clearAuthData();
@@ -295,9 +307,12 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ],
         ),
-        body: isLoading
-            ? _buildLoadingState()
-            : (_isMaster ? _buildMasterContent() : _buildClientContent()),
+        body: FadeTransition(
+          opacity: _fadeAnimation,
+          child: isLoading
+              ? _buildLoadingState(appLocalizations)
+              : (_isMaster ? _buildMasterContent(appLocalizations) : _buildClientContent(appLocalizations)),
+        ),
         bottomNavigationBar: _accountTypeForNavBar == null
             ? null
             : SafeArea(
@@ -325,18 +340,66 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildLoadingState() {
-    return const Center(
+  Widget _buildLanguageButton(BuildContext context, LanguageProvider languageProvider, AppLocalizations? appLocalizations) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLanguageOption('RU', const Locale('ru'), languageProvider.locale.languageCode == 'ru', languageProvider, context),
+          _buildLanguageOption('KZ', const Locale('kk'), languageProvider.locale.languageCode == 'kk', languageProvider, context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(String code, Locale locale, bool isActive, LanguageProvider provider, BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        provider.setLanguage(locale);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(locale.languageCode == 'ru' ? 'Язык изменен на русский' : 'Тіл қазақшаға өзгертілді'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Text(
+          code,
+          style: TextStyle(
+            color: isActive ? Colors.blue.shade700 : Colors.grey.shade600,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState(AppLocalizations? appLocalizations) {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(
+          const CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F7EDE)),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
-            'Загрузка профиля...',
-            style: TextStyle(
+            appLocalizations?.translate('loading_profile') ?? 'Загрузка профиля...',
+            style: const TextStyle(
               fontSize: 16,
               color: Color(0xFF5F6368),
               fontFamily: 'Plus Jakarta Sans',
@@ -347,11 +410,11 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildClientContent() {
-    final String lastName = userData?['lastname'] ?? 'Не указано';
+  Widget _buildClientContent(AppLocalizations? appLocalizations) {
+    final String lastName = userData?['lastname'] ?? appLocalizations?.translate('not_specified') ?? 'Не указано';
     final String firstName = userData?['firstname'] ?? '';
     final String patronymic = userData?['patronymic'] ?? '';
-    final String phone = userData?['telephone'] ?? 'Не указан';
+    final String phone = userData?['telephone'] ?? appLocalizations?.translate('not_specified') ?? 'Не указан';
 
     return RefreshIndicator(
       onRefresh: _loadUserProfile,
@@ -365,7 +428,7 @@ class _AccountPageState extends State<AccountPage> {
               Center(
                 child: Column(
                   children: [
-                    _buildAvatar(isMaster: _isMaster),
+                    _buildAvatar(isMaster: _isMaster, appLocalizations: appLocalizations),
                     const SizedBox(height: 16),
                     Text(
                       lastName,
@@ -411,7 +474,7 @@ class _AccountPageState extends State<AccountPage> {
               const SizedBox(height: 30),
               _buildMenuButton(
                 icon: 'assets/list.png',
-                title: 'Мои заказы',
+                title: appLocalizations?.translate('my_orders') ?? 'Мои заказы',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const MyOrdersClientPage()),
@@ -420,7 +483,7 @@ class _AccountPageState extends State<AccountPage> {
               const SizedBox(height: 12),
               _buildMenuButton(
                 icon: 'assets/help.png',
-                title: 'Помощь',
+                title: appLocalizations?.translate('help') ?? 'Помощь',
                 onTap: () {
                   Navigator.push(
                     context,
@@ -436,11 +499,11 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildMasterContent() {
-    final String lastName = userData?['lastname'] ?? 'Не указано';
+  Widget _buildMasterContent(AppLocalizations? appLocalizations) {
+    final String lastName = userData?['lastname'] ?? appLocalizations?.translate('not_specified') ?? 'Не указано';
     final String firstName = userData?['firstname'] ?? '';
     final String patronymic = userData?['patronymic'] ?? '';
-    final String phone = userData?['telephone'] ?? 'Не указан';
+    final String phone = userData?['telephone'] ?? appLocalizations?.translate('not_specified') ?? 'Не указан';
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -457,7 +520,7 @@ class _AccountPageState extends State<AccountPage> {
               Center(
                 child: Column(
                   children: [
-                    _buildAvatar(isMaster: _isMaster),
+                    _buildAvatar(isMaster: _isMaster, appLocalizations: appLocalizations),
                     const SizedBox(height: 16),
                     Text(
                       lastName,
@@ -499,39 +562,17 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
-              // Категории
-              _buildCategorySelector(),
+              _buildCategorySelector(appLocalizations),
               const SizedBox(height: 20),
-              
-              // Социальные сети
-              _buildSocialLinks(),
+              _buildSocialLinks(appLocalizations),
               const SizedBox(height: 20),
-              
-              // Подписка
-              _buildSubscriptionBlock(),
+              _buildSubscriptionBlock(appLocalizations),
               const SizedBox(height: 24),
-              
-              // Статистика отзывов
-              _buildReviewsStats(),
+              _buildReviewsStats(appLocalizations),
               const SizedBox(height: 20),
-              
-              // Список отзывов
-              const Text(
-                'Все отзывы',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1D2125),
-                  fontFamily: 'Plus Jakarta Sans',
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildReviewsList(),
+              _buildReviewsList(appLocalizations),
               const SizedBox(height: 24),
-              
-              // Мои работы
-              _buildMyWorksSection(),
+              _buildMyWorksSection(appLocalizations),
               const SizedBox(height: 80),
             ],
           ),
@@ -540,7 +581,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildAvatar({required bool isMaster}) {
+  Widget _buildAvatar({required bool isMaster, required AppLocalizations? appLocalizations}) {
     String? avatarUrl = userData?['avatar'];
     String displayLetter = userData?['firstname']?.isNotEmpty == true
         ? userData!['firstname'][0].toUpperCase()
@@ -617,11 +658,7 @@ class _AccountPageState extends State<AccountPage> {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.edit,
-                color: Colors.white,
-                size: 16,
-              ),
+              child: const Icon(Icons.edit, color: Colors.white, size: 16),
             ),
           ),
         ),
@@ -629,7 +666,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildCategorySelector() {
+  Widget _buildCategorySelector(AppLocalizations? appLocalizations) {
     final categoriesList = userData?['categories'] as List?;
     final hasCategories = categoriesList != null && categoriesList.isNotEmpty;
 
@@ -652,9 +689,9 @@ class _AccountPageState extends State<AccountPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Мои категории',
-              style: TextStyle(
+            Text(
+              appLocalizations?.translate('my_categories') ?? 'Мои категории',
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF41454A),
@@ -692,23 +729,23 @@ class _AccountPageState extends State<AccountPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Добавить категории',
-                              style: TextStyle(
+                              appLocalizations?.translate('add_categories') ?? 'Добавить категории',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF1D2125),
                                 fontFamily: 'Plus Jakarta Sans',
                               ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
-                              'Выберите категории услуг',
-                              style: TextStyle(
+                              appLocalizations?.translate('select_service_categories') ?? 'Выберите категории услуг',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF8A8D90),
                                 fontFamily: 'Plus Jakarta Sans',
@@ -767,9 +804,9 @@ class _AccountPageState extends State<AccountPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Мои категории',
-                style: TextStyle(
+              Text(
+                appLocalizations?.translate('my_categories') ?? 'Мои категории',
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF41454A),
@@ -818,13 +855,11 @@ class _AccountPageState extends State<AccountPage> {
                   border: Border.all(color: bgColor.withOpacity(0.5)),
                 ),
                 child: Text(
-                  category['name'] ?? 'Категория',
+                  category['name'] ?? appLocalizations?.translate('category') ?? 'Категория',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: bgColor.computeLuminance() > 0.5
-                        ? const Color(0xFF1D2125)
-                        : Colors.white,
+                    color: bgColor.computeLuminance() > 0.5 ? const Color(0xFF1D2125) : Colors.white,
                     fontFamily: 'Plus Jakarta Sans',
                   ),
                 ),
@@ -845,12 +880,12 @@ class _AccountPageState extends State<AccountPage> {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0F7EDE)),
-                    SizedBox(width: 8),
+                  children: [
+                    const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0F7EDE)),
+                    const SizedBox(width: 8),
                     Text(
-                      'Редактировать категории',
-                      style: TextStyle(
+                      appLocalizations?.translate('edit_categories') ?? 'Редактировать категории',
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF0F7EDE),
@@ -867,11 +902,9 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildSocialLinks() {
-    final hasTikTok = userData?['ttUsername'] != null &&
-        userData!['ttUsername'].toString().isNotEmpty;
-    final hasInstagram = userData?['instUsername'] != null &&
-        userData!['instUsername'].toString().isNotEmpty;
+  Widget _buildSocialLinks(AppLocalizations? appLocalizations) {
+    final hasTikTok = userData?['ttUsername'] != null && userData!['ttUsername'].toString().isNotEmpty;
+    final hasInstagram = userData?['instUsername'] != null && userData!['instUsername'].toString().isNotEmpty;
 
     if (!hasTikTok && !hasInstagram) {
       return Container(
@@ -892,9 +925,9 @@ class _AccountPageState extends State<AccountPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Социальные сети',
-              style: TextStyle(
+            Text(
+              appLocalizations?.translate('social_media') ?? 'Социальные сети',
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF41454A),
@@ -932,23 +965,23 @@ class _AccountPageState extends State<AccountPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Добавить соцсети',
-                              style: TextStyle(
+                              appLocalizations?.translate('add_social_media') ?? 'Добавить соцсети',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF1D2125),
                                 fontFamily: 'Plus Jakarta Sans',
                               ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
-                              'Instagram и TikTok',
-                              style: TextStyle(
+                              appLocalizations?.translate('instagram_and_tiktok') ?? 'Instagram и TikTok',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF8A8D90),
                                 fontFamily: 'Plus Jakarta Sans',
@@ -1004,9 +1037,9 @@ class _AccountPageState extends State<AccountPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Социальные сети',
-            style: TextStyle(
+          Text(
+            appLocalizations?.translate('social_media') ?? 'Социальные сети',
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Color(0xFF41454A),
@@ -1016,19 +1049,25 @@ class _AccountPageState extends State<AccountPage> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildSocialButton(
-                icon: 'assets/tiktok.png',
-                username: userData?['ttUsername'],
-                platform: 'tiktok',
-                color: Colors.black,
-              )),
+              Expanded(
+                child: _buildSocialButton(
+                  icon: 'assets/tiktok.png',
+                  username: userData?['ttUsername'],
+                  platform: 'tiktok',
+                  color: Colors.black,
+                  appLocalizations: appLocalizations,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _buildSocialButton(
-                icon: 'assets/instagram.png',
-                username: userData?['instUsername'],
-                platform: 'instagram',
-                color: const Color(0xFFE4405F),
-              )),
+              Expanded(
+                child: _buildSocialButton(
+                  icon: 'assets/instagram.png',
+                  username: userData?['instUsername'],
+                  platform: 'instagram',
+                  color: const Color(0xFFE4405F),
+                  appLocalizations: appLocalizations,
+                ),
+              ),
             ],
           ),
         ],
@@ -1041,6 +1080,7 @@ class _AccountPageState extends State<AccountPage> {
     required String? username,
     required String platform,
     required Color color,
+    required AppLocalizations? appLocalizations,
   }) {
     final hasUsername = username != null && username.isNotEmpty;
 
@@ -1077,7 +1117,7 @@ class _AccountPageState extends State<AccountPage> {
               Text(
                 hasUsername
                     ? '@${username.length > 10 ? '${username.substring(0, 10)}...' : username}'
-                    : 'Не указан',
+                    : appLocalizations?.translate('not_specified') ?? 'Не указан',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: hasUsername ? FontWeight.w500 : FontWeight.w400,
@@ -1099,14 +1139,13 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildSubscriptionBlock() {
+  Widget _buildSubscriptionBlock(AppLocalizations? appLocalizations) {
     final subscriptions = userData?['subscriptions'] as List?;
     final hasSubscription = subscriptions != null && subscriptions.isNotEmpty;
 
     if (!hasSubscription) {
       return GestureDetector(
-        onTap: () => _launchUrl(
-            'https://qr.kaspi.kz/19134627698424934147714893150004931409130'),
+        onTap: () => _launchUrl('https://qr.kaspi.kz/19134627698424934147714893150004931409130'),
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -1130,10 +1169,10 @@ class _AccountPageState extends State<AccountPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Премиум\nподписка',
-                        style: TextStyle(
+                        appLocalizations?.translate('premium_subscription') ?? 'Премиум\nподписка',
+                        style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
@@ -1167,18 +1206,6 @@ class _AccountPageState extends State<AccountPage> {
                   ],
                 ),
               ),
-              Container(height: 1, color: Colors.white.withOpacity(0.2)),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildSubscriptionFeature('Публикация услуг'),
-                    _buildSubscriptionFeature('Просмотр номеров'),
-                    _buildSubscriptionFeature('Больше заказов'),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -1192,10 +1219,9 @@ class _AccountPageState extends State<AccountPage> {
     if (endAt != null) {
       try {
         final dateTime = DateTime.parse(endAt);
-        formattedDate =
-            '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}.${dateTime.year}';
+        formattedDate = '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}.${dateTime.year}';
       } catch (e) {
-        formattedDate = 'Дата не указана';
+        formattedDate = appLocalizations?.translate('date_not_specified') ?? 'Дата не указана';
       }
     }
 
@@ -1226,9 +1252,9 @@ class _AccountPageState extends State<AccountPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Подписка активна',
-                  style: TextStyle(
+                Text(
+                  appLocalizations?.translate('subscription_active') ?? 'Подписка активна',
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1565C0),
@@ -1237,7 +1263,7 @@ class _AccountPageState extends State<AccountPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'до $formattedDate',
+                  '${appLocalizations?.translate('until') ?? 'до'} $formattedDate',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF1565C0),
@@ -1253,9 +1279,9 @@ class _AccountPageState extends State<AccountPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
-              'Активно',
-              style: TextStyle(
+            child: Text(
+              appLocalizations?.translate('active') ?? 'Активно',
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF4CAF50),
@@ -1284,7 +1310,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildReviewsStats() {
+  Widget _buildReviewsStats(AppLocalizations? appLocalizations) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1302,9 +1328,9 @@ class _AccountPageState extends State<AccountPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Отзывы клиентов',
-            style: TextStyle(
+          Text(
+            appLocalizations?.translate('client_reviews') ?? 'Отзывы клиентов',
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Color(0xFF41454A),
@@ -1312,20 +1338,15 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ),
           const SizedBox(height: 16),
-          
           Row(
             children: [
-              // Крупная цифра рейтинга
               Container(
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF9E7),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.amber.withOpacity(0.3),
-                    width: 2,
-                  ),
+                  border: Border.all(color: Colors.amber.withOpacity(0.3), width: 2),
                 ),
                 child: Center(
                   child: Column(
@@ -1339,9 +1360,9 @@ class _AccountPageState extends State<AccountPage> {
                           color: Color(0xFF41454A),
                         ),
                       ),
-                      const Text(
-                        'из 5',
-                        style: TextStyle(
+                      Text(
+                        appLocalizations?.translate('out_of_5') ?? 'из 5',
+                        style: const TextStyle(
                           fontSize: 10,
                           color: Color(0xFF8A8D90),
                         ),
@@ -1351,25 +1372,20 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               const SizedBox(width: 20),
-              
-              // Статистика по звездам
               Expanded(
                 child: Column(
                   children: [
-                    _buildRatingBar(5, _getRatingPercentage(5)),
-                    _buildRatingBar(4, _getRatingPercentage(4)),
-                    _buildRatingBar(3, _getRatingPercentage(3)),
-                    _buildRatingBar(2, _getRatingPercentage(2)),
-                    _buildRatingBar(1, _getRatingPercentage(1)),
+                    _buildRatingBar(5, _getRatingPercentage(5), appLocalizations),
+                    _buildRatingBar(4, _getRatingPercentage(4), appLocalizations),
+                    _buildRatingBar(3, _getRatingPercentage(3), appLocalizations),
+                    _buildRatingBar(2, _getRatingPercentage(2), appLocalizations),
+                    _buildRatingBar(1, _getRatingPercentage(1), appLocalizations),
                   ],
                 ),
               ),
             ],
           ),
-          
           const SizedBox(height: 16),
-          
-          // Общее количество отзывов
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: BoxDecoration(
@@ -1379,9 +1395,9 @@ class _AccountPageState extends State<AccountPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Всего отзывов:',
-                  style: TextStyle(
+                Text(
+                  appLocalizations?.translate('total_reviews') ?? 'Всего отзывов:',
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF5F6368),
                     fontFamily: 'Plus Jakarta Sans',
@@ -1404,7 +1420,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildRatingBar(int stars, double percentage) {
+  Widget _buildRatingBar(int stars, double percentage, AppLocalizations? appLocalizations) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -1450,12 +1466,11 @@ class _AccountPageState extends State<AccountPage> {
 
   double _getRatingPercentage(int stars) {
     if (_reviews.isEmpty) return 0;
-    
     final count = _reviews.where((r) => r.rating == stars).length;
     return count / _reviews.length;
   }
 
-  Widget _buildReviewsList() {
+  Widget _buildReviewsList(AppLocalizations? appLocalizations) {
     if (_isLoadingReviews) {
       return const Center(
         child: Padding(
@@ -1478,15 +1493,11 @@ class _AccountPageState extends State<AccountPage> {
         ),
         child: Column(
           children: [
-            Icon(
-              Icons.rate_review_outlined,
-              size: 64,
-              color: Colors.grey[300],
-            ),
+            Icon(Icons.rate_review_outlined, size: 64, color: Colors.grey[300]),
             const SizedBox(height: 16),
-            const Text(
-              'Пока нет отзывов',
-              style: TextStyle(
+            Text(
+              appLocalizations?.translate('no_reviews_yet') ?? 'Пока нет отзывов',
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF5F6368),
@@ -1495,7 +1506,8 @@ class _AccountPageState extends State<AccountPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Когда клиенты начнут оставлять отзывы, они появятся здесь',
+              appLocalizations?.translate('reviews_will_appear') ??
+                  'Когда клиенты начнут оставлять отзывы, они появятся здесь',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -1522,7 +1534,6 @@ class _AccountPageState extends State<AccountPage> {
         separatorBuilder: (_, __) => const Divider(height: 24),
         itemBuilder: (context, index) {
           final review = _reviews[index];
-          
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1532,7 +1543,7 @@ class _AccountPageState extends State<AccountPage> {
                     radius: 20,
                     backgroundColor: const Color(0xFFE0E0E0),
                     child: Text(
-                      review.client.firstname.isNotEmpty 
+                      review.client.firstname.isNotEmpty
                           ? review.client.firstname[0].toUpperCase()
                           : '?',
                       style: const TextStyle(
@@ -1569,21 +1580,14 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF5F5F5),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.star,
-                          size: 14,
-                          color: Colors.amber,
-                        ),
+                        const Icon(Icons.star, size: 14, color: Colors.amber),
                         const SizedBox(width: 2),
                         Text(
                           review.rating.toString(),
@@ -1624,16 +1628,16 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildMyWorksSection() {
+  Widget _buildMyWorksSection(AppLocalizations? appLocalizations) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Мои работы',
-              style: TextStyle(
+            Text(
+              appLocalizations?.translate('my_works') ?? 'Мои работы',
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1D2125),
@@ -1673,9 +1677,9 @@ class _AccountPageState extends State<AccountPage> {
                       children: [
                         Icon(Icons.photo_library, size: 60, color: Colors.grey[300]),
                         const SizedBox(height: 12),
-                        const Text(
-                          'Нет загруженных работ',
-                          style: TextStyle(
+                        Text(
+                          appLocalizations?.translate('no_works_uploaded') ?? 'Нет загруженных работ',
+                          style: const TextStyle(
                             color: Color(0xFF8A8D90),
                             fontSize: 16,
                             fontFamily: 'Plus Jakarta Sans',
@@ -1688,17 +1692,14 @@ class _AccountPageState extends State<AccountPage> {
                             onTap: _openEditPortfolioPage,
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF0F7EDE),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Text(
-                                'Добавить работу',
-                                style: TextStyle(
+                              child: Text(
+                                appLocalizations?.translate('add_work') ?? 'Добавить работу',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -1725,19 +1726,10 @@ class _AccountPageState extends State<AccountPage> {
                       const double r = 12;
                       BorderRadius radius = BorderRadius.zero;
 
-                      if (index == 0) {
-                        radius = const BorderRadius.only(topLeft: Radius.circular(r));
-                      } else if (index == 2) {
-                        radius = const BorderRadius.only(topRight: Radius.circular(r));
-                      } else if (index == 6) {
-                        radius = const BorderRadius.only(
-                          bottomLeft: Radius.circular(r),
-                        );
-                      } else if (index == 8) {
-                        radius = const BorderRadius.only(
-                          bottomRight: Radius.circular(r),
-                        );
-                      }
+                      if (index == 0) radius = const BorderRadius.only(topLeft: Radius.circular(r));
+                      else if (index == 2) radius = const BorderRadius.only(topRight: Radius.circular(r));
+                      else if (index == 6) radius = const BorderRadius.only(bottomLeft: Radius.circular(r));
+                      else if (index == 8) radius = const BorderRadius.only(bottomRight: Radius.circular(r));
 
                       if (index == portfolioImages.length) {
                         return Material(
@@ -1749,10 +1741,7 @@ class _AccountPageState extends State<AccountPage> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF5F5F5),
                                 borderRadius: radius,
-                                border: Border.all(
-                                  color: const Color(0xFFE0E0E0),
-                                  width: 1,
-                                ),
+                                border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
                               ),
                               child: const Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1785,9 +1774,7 @@ class _AccountPageState extends State<AccountPage> {
                               decoration: BoxDecoration(
                                 borderRadius: radius,
                                 image: DecorationImage(
-                                  image: NetworkImage(
-                                    'http://gj-back.checkedout.kz/storage/${workPhoto.path}',
-                                  ),
+                                  image: NetworkImage('http://gj-back.checkedout.kz/storage/${workPhoto.path}'),
                                   fit: BoxFit.cover,
                                 ),
                               ),
@@ -1796,12 +1783,7 @@ class _AccountPageState extends State<AccountPage> {
                         );
                       }
 
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: radius,
-                        ),
-                      );
+                      return Container(decoration: BoxDecoration(color: Colors.grey[100], borderRadius: radius));
                     },
                   ),
           ),
@@ -1845,11 +1827,7 @@ class _AccountPageState extends State<AccountPage> {
                   width: 24,
                   height: 24,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      Icons.help_outline,
-                      color: Color(0xFF41454A),
-                      size: 24,
-                    );
+                    return const Icon(Icons.help_outline, color: Color(0xFF41454A), size: 24);
                   },
                 ),
               const SizedBox(width: 16),
@@ -1866,141 +1844,6 @@ class _AccountPageState extends State<AccountPage> {
               ),
               const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF9AA0A6)),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showSubscribeModal(BuildContext context) {
-    bool isSent = false;
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.2),
-      barrierDismissible: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-              child: Dialog(
-                insetPadding: const EdgeInsets.symmetric(horizontal: 14),
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!isSent) ...[
-                        const Text(
-                          'Подтвердите\nзапрос на оплату',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1D2125),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildTextField('Почта', TextInputType.emailAddress),
-                        const SizedBox(height: 16),
-                        _buildTextField('Номер', TextInputType.phone),
-                        const SizedBox(height: 24),
-                        _buildDialogButton(
-                          text: 'Отправить',
-                          onTap: () => setState(() => isSent = true),
-                        ),
-                      ] else ...[
-                        const Text(
-                          'Запрос отправлен',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1D2125),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check,
-                            color: Color(0xFF4CAF50),
-                            size: 48,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildDialogButton(
-                          text: 'На главную',
-                          onTap: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildTextField(String hint, TextInputType type) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: TextField(
-          keyboardType: type,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            hintText: hint,
-            hintStyle: const TextStyle(color: Color(0xFF9AA0A6)),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDialogButton({required String text, required VoidCallback onTap}) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: double.infinity,
-          height: 56,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F7EDE),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                fontFamily: 'Plus Jakarta Sans',
-              ),
-            ),
           ),
         ),
       ),

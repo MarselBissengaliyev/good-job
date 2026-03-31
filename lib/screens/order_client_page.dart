@@ -4,8 +4,12 @@ import 'package:goodjob/custom_bottom_navbar.dart';
 import 'package:goodjob/screens/account_page.dart';
 import 'package:goodjob/screens/edit_order_page.dart';
 import 'package:goodjob/screens/interested_in_order_page.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:goodjob/services/api_service.dart';
+
+import '../localization/app_localizations.dart';
+import '../providers/language_provider.dart';
 
 class OrderClientPage extends StatefulWidget {
   final String orderId;
@@ -21,21 +25,23 @@ class OrderClientPage extends StatefulWidget {
   State<OrderClientPage> createState() => _OrderClientPageState();
 }
 
-class _OrderClientPageState extends State<OrderClientPage> {
+class _OrderClientPageState extends State<OrderClientPage>
+    with SingleTickerProviderStateMixin {
   Map<String, dynamic>? _order;
   bool _isLoading = true;
   String? _errorMessage;
-  bool _hasMarkedAsViewed = false; // Добавьте эту переменную
-
+  bool _hasMarkedAsViewed = false;
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  bool _isLoadingData = false; // Add this flag to prevent multiple loads
 
   @override
   void initState() {
     super.initState();
-    _loadOrderData();
+    _initAnimation();
 
-    // Устанавливаем цвет системной навигации
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Color(0xFFFAFAFA),
@@ -45,21 +51,42 @@ class _OrderClientPageState extends State<OrderClientPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load data here instead of initState
+    if (!_isLoadingData) {
+      _isLoadingData = true;
+      _loadOrderData();
+    }
+  }
+
+  void _initAnimation() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _animationController.forward();
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
-
-    // Возвращаем стандартные настройки при выходе
+    _animationController.dispose();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.black,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-
     super.dispose();
   }
 
   Future<void> _loadOrderData() async {
+    final appLocalizations = AppLocalizations.of(context);
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -71,11 +98,8 @@ class _OrderClientPageState extends State<OrderClientPage> {
         _order = orderResponse['data'];
       });
 
-      // Отмечаем заказ как просмотренный ТОЛЬКО если это НЕ мой заказ
-      // и если еще не отмечали в этой сессии
       if (!widget.isMyOrder && !_hasMarkedAsViewed && mounted) {
         _hasMarkedAsViewed = true;
-        // Вызываем без await, чтобы не блокировать загрузку
         ApiService.markOrderAsViewed(widget.orderId).catchError((error) {
           print('Failed to mark order as viewed: $error');
         });
@@ -96,6 +120,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
   }
 
   void _showCustomSnackBar({required String message, required bool isSuccess}) {
+    final appLocalizations = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -126,7 +151,7 @@ class _OrderClientPageState extends State<OrderClientPage> {
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
-          label: 'OK',
+          label: appLocalizations?.translate('ok') ?? 'OK',
           textColor: Colors.white,
           onPressed: () {},
         ),
@@ -138,11 +163,9 @@ class _OrderClientPageState extends State<OrderClientPage> {
     if (_order == null) return false;
     final isActive = _order?['is_active'] ?? false;
     final status = _order?['status']?.toString().toLowerCase();
-
     if (status == 'active') return true;
     if (status == 'archived') return false;
     if (status == 'canceled') return false;
-
     return isActive == true;
   }
 
@@ -158,129 +181,154 @@ class _OrderClientPageState extends State<OrderClientPage> {
     }
   }
 
-  Future<void> _withdrawOrder() async {
-    if (_order == null) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Отозвать заказ'),
-        content: const Text('Вы уверены, что хотите отозвать этот заказ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Отозвать', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        _showCustomSnackBar(message: 'Отзыв заказа...', isSuccess: true);
-
-        await ApiService.changeOrderStatus(
-          orderId: widget.orderId,
-          status: 'canceled',
-        );
-
-        setState(() {
-          _order?['status'] = 'canceled';
-          _order?['is_active'] = false;
-        });
-
-        _showCustomSnackBar(message: 'Заказ успешно отозван', isSuccess: true);
-      } catch (e) {
-        _showCustomSnackBar(
-          message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-          isSuccess: false,
-        );
-      }
-    }
-  }
-
-void _editOrder() {
+ Future<void> _withdrawOrder() async {
+  final appLocalizations = AppLocalizations.of(context);
   if (_order == null) return;
-  
-  final orderId = _order!['id'].toString();
-  
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => EditOrderPage(
-        orderId: orderId,
-        onOrderUpdated: _loadOrderData,
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(
+        appLocalizations?.translate('withdraw_order') ?? 'Отозвать заказ',
       ),
+      content: Text(
+        appLocalizations?.translate('withdraw_order_confirm') ??
+            'Вы уверены, что хотите отозвать этот заказ?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(appLocalizations?.translate('cancel') ?? 'Отмена'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(
+            appLocalizations?.translate('withdraw') ?? 'Отозвать',
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      ],
     ),
   );
-}
-  Future<void> _publishOrder() async {
+
+  if (confirmed == true) {
     try {
-      _showCustomSnackBar(message: 'Публикация заказа...', isSuccess: true);
-
-      await ApiService.changeOrderStatus(
-        orderId: widget.orderId,
-        status: 'active',
-      );
-
-      setState(() {
-        _order?['status'] = 'active';
-        _order?['is_active'] = true;
-      });
-
       _showCustomSnackBar(
-        message: 'Заказ успешно опубликован',
+        message: appLocalizations?.translate('withdrawing_order') ?? 'Отзыв заказа...',
         isSuccess: true,
       );
-    } catch (e) {
-      _showCustomSnackBar(
-        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
-        isSuccess: false,
-      );
-    }
-  }
 
-  Future<void> _unpublishOrder() async {
-    try {
-      _showCustomSnackBar(message: 'Отзыв публикации...', isSuccess: true);
-
-      await ApiService.changeOrderStatus(
-        orderId: widget.orderId,
-        status: 'canceled',
-      );
+      // Используем новый метод revokeOrder
+      await ApiService.revokeOrder(widget.orderId);
 
       setState(() {
         _order?['status'] = 'canceled';
         _order?['is_active'] = false;
       });
 
-      _showCustomSnackBar(message: 'Публикация отозвана', isSuccess: true);
+      _showCustomSnackBar(
+        message: appLocalizations?.translate('order_withdrawn') ?? 'Заказ успешно отозван',
+        isSuccess: true,
+      );
     } catch (e) {
       _showCustomSnackBar(
-        message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+        message: '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
         isSuccess: false,
       );
     }
   }
+} 
+
+  void _editOrder() {
+    if (_order == null) return;
+    final orderId = _order!['id'].toString();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            EditOrderPage(orderId: orderId, onOrderUpdated: _loadOrderData),
+      ),
+    );
+  }
+
+Future<void> _publishOrder() async {
+  final appLocalizations = AppLocalizations.of(context);
+  try {
+    _showCustomSnackBar(
+      message: appLocalizations?.translate('publishing_order') ?? 'Публикация заказа...',
+      isSuccess: true,
+    );
+
+    // Используем новый метод publishOrder
+    await ApiService.publishOrder(widget.orderId);
+
+    setState(() {
+      _order?['status'] = 'active';
+      _order?['is_active'] = true;
+    });
+
+    _showCustomSnackBar(
+      message: appLocalizations?.translate('order_published') ?? 'Заказ успешно опубликован',
+      isSuccess: true,
+    );
+  } catch (e) {
+    _showCustomSnackBar(
+      message: '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
+      isSuccess: false,
+    );
+  }
+}
+ Future<void> _unpublishOrder() async {
+  final appLocalizations = AppLocalizations.of(context);
+  try {
+    _showCustomSnackBar(
+      message: appLocalizations?.translate('unpublishing_order') ?? 'Отзыв публикации...',
+      isSuccess: true,
+    );
+
+    // Используем новый метод revokeOrder
+    await ApiService.revokeOrder(widget.orderId);
+
+    setState(() {
+      _order?['status'] = 'canceled';
+      _order?['is_active'] = false;
+    });
+
+    _showCustomSnackBar(
+      message: appLocalizations?.translate('order_unpublished') ?? 'Публикация отозвана',
+      isSuccess: true,
+    );
+  } catch (e) {
+    _showCustomSnackBar(
+      message: '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
+      isSuccess: false,
+    );
+  }
+}
+
 
   Future<void> _archiveOrder() async {
+    final appLocalizations = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Архивировать заказ?'),
-        content: const Text('Вы уверены, что хотите архивировать этот заказ?'),
+        title: Text(
+          appLocalizations?.translate('archive_order') ?? 'Архивировать заказ?',
+        ),
+        content: Text(
+          appLocalizations?.translate('archive_order_confirm') ??
+              'Вы уверены, что хотите архивировать этот заказ?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: Text(appLocalizations?.translate('cancel') ?? 'Отмена'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Архивировать'),
+            child: Text(
+              appLocalizations?.translate('archive') ?? 'Архивировать',
+            ),
           ),
         ],
       ),
@@ -288,7 +336,12 @@ void _editOrder() {
 
     if (confirmed == true) {
       try {
-        _showCustomSnackBar(message: 'Архивация заказа...', isSuccess: true);
+        _showCustomSnackBar(
+          message:
+              appLocalizations?.translate('archiving_order') ??
+              'Архивация заказа...',
+          isSuccess: true,
+        );
 
         await ApiService.changeOrderStatus(
           orderId: widget.orderId,
@@ -300,10 +353,16 @@ void _editOrder() {
           _order?['is_active'] = false;
         });
 
-        _showCustomSnackBar(message: 'Заказ архивирован', isSuccess: true);
+        _showCustomSnackBar(
+          message:
+              appLocalizations?.translate('order_archived') ??
+              'Заказ архивирован',
+          isSuccess: true,
+        );
       } catch (e) {
         _showCustomSnackBar(
-          message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+          message:
+              '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
           isSuccess: false,
         );
       }
@@ -311,24 +370,32 @@ void _editOrder() {
   }
 
   Future<void> _deleteOrder() async {
+    final appLocalizations = AppLocalizations.of(context);
     final orderIdInt = int.tryParse(widget.orderId) ?? 0;
     if (orderIdInt == 0) {
-      _showCustomSnackBar(message: 'Неверный ID заказа', isSuccess: false);
+      _showCustomSnackBar(
+        message:
+            appLocalizations?.translate('invalid_order_id') ??
+            'Неверный ID заказа',
+        isSuccess: false,
+      );
       return;
     }
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить заказ?'),
-        content: const Text(
-          'Вы уверены, что хотите удалить этот заказ?\n'
-          'Это действие нельзя отменить.',
+        title: Text(
+          appLocalizations?.translate('delete_order') ?? 'Удалить заказ?',
+        ),
+        content: Text(
+          appLocalizations?.translate('delete_order_confirm') ??
+              'Вы уверены, что хотите удалить этот заказ?\nЭто действие нельзя отменить.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: Text(appLocalizations?.translate('cancel') ?? 'Отмена'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -336,7 +403,7 @@ void _editOrder() {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Удалить'),
+            child: Text(appLocalizations?.translate('delete') ?? 'Удалить'),
           ),
         ],
       ),
@@ -344,18 +411,29 @@ void _editOrder() {
 
     if (confirmed == true) {
       try {
-        _showCustomSnackBar(message: 'Удаление заказа...', isSuccess: true);
+        _showCustomSnackBar(
+          message:
+              appLocalizations?.translate('deleting_order') ??
+              'Удаление заказа...',
+          isSuccess: true,
+        );
 
         await ApiService.deleteOrder(orderIdInt);
 
-        _showCustomSnackBar(message: 'Заказ успешно удален', isSuccess: true);
+        _showCustomSnackBar(
+          message:
+              appLocalizations?.translate('order_deleted') ??
+              'Заказ успешно удален',
+          isSuccess: true,
+        );
 
         if (mounted) {
           Navigator.pop(context, 'deleted');
         }
       } catch (e) {
         _showCustomSnackBar(
-          message: 'Ошибка: ${e.toString().replaceAll('Exception: ', '')}',
+          message:
+              '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
           isSuccess: false,
         );
       }
@@ -363,10 +441,16 @@ void _editOrder() {
   }
 
   Future<void> _contactAuthor() async {
+    final appLocalizations = AppLocalizations.of(context);
     final phone = _order?['telephone'];
 
     if (phone == null || phone.toString().isEmpty) {
-      _showCustomSnackBar(message: 'У вас нет подписки', isSuccess: false);
+      _showCustomSnackBar(
+        message:
+            appLocalizations?.translate('no_subscription') ??
+            'У вас нет подписки',
+        isSuccess: false,
+      );
       return;
     }
 
@@ -374,6 +458,7 @@ void _editOrder() {
   }
 
   void _showOrderOptionsModal() {
+    final appLocalizations = AppLocalizations.of(context);
     final isActive = _isOrderActive();
 
     showModalBottomSheet(
@@ -409,7 +494,6 @@ void _editOrder() {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Индикатор прокрутки
                   Container(
                     width: 40,
                     height: 5,
@@ -419,8 +503,6 @@ void _editOrder() {
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
-
-                  // Заголовок
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                     child: Row(
@@ -430,7 +512,8 @@ void _editOrder() {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Управление',
+                              appLocalizations?.translate('manage') ??
+                                  'Управление',
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
@@ -442,7 +525,9 @@ void _editOrder() {
                             Text(
                               _order?['title']?.length > 30
                                   ? '${_order?['title'].substring(0, 30)}...'
-                                  : _order?['title'] ?? 'Заказ',
+                                  : _order?['title'] ??
+                                        appLocalizations?.translate('order') ??
+                                        'Заказ',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: const Color(0xFF9E9E9E),
@@ -472,8 +557,6 @@ void _editOrder() {
                       ],
                     ),
                   ),
-
-                  // Статус заказа (компактный)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Container(
@@ -515,7 +598,11 @@ void _editOrder() {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              isActive ? 'Активен' : 'Не активен',
+                              isActive
+                                  ? appLocalizations?.translate('active') ??
+                                        'Активен'
+                                  : appLocalizations?.translate('inactive') ??
+                                        'Не активен',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -530,17 +617,16 @@ void _editOrder() {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Опции действий (компактные)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
                       children: [
                         _buildCompactOption(
                           icon: Icons.edit_note_rounded,
-                          label: 'Редактировать',
+                          label:
+                              appLocalizations?.translate('edit') ??
+                              'Редактировать',
                           color: const Color(0xFF2196F3),
                           onTap: () {
                             Navigator.pop(context);
@@ -552,7 +638,10 @@ void _editOrder() {
                           icon: isActive
                               ? Icons.visibility_off_rounded
                               : Icons.visibility_rounded,
-                          label: isActive ? 'Скрыть' : 'Опубликовать',
+                          label: isActive
+                              ? appLocalizations?.translate('hide') ?? 'Скрыть'
+                              : appLocalizations?.translate('publish') ??
+                                    'Опубликовать',
                           color: isActive
                               ? const Color(0xFFFF9800)
                               : const Color(0xFF4CAF50),
@@ -568,7 +657,9 @@ void _editOrder() {
                         const SizedBox(height: 8),
                         _buildCompactOption(
                           icon: Icons.archive_rounded,
-                          label: 'В архив',
+                          label:
+                              appLocalizations?.translate('archive') ??
+                              'В архив',
                           color: const Color(0xFF795548),
                           onTap: () {
                             Navigator.pop(context);
@@ -578,7 +669,9 @@ void _editOrder() {
                         const SizedBox(height: 8),
                         _buildCompactOption(
                           icon: Icons.delete_forever_rounded,
-                          label: 'Удалить',
+                          label:
+                              appLocalizations?.translate('delete') ??
+                              'Удалить',
                           color: const Color(0xFFF44336),
                           onTap: () {
                             Navigator.pop(context);
@@ -589,10 +682,7 @@ void _editOrder() {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Компактная кнопка закрытия
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                     child: OutlinedButton(
@@ -609,9 +699,9 @@ void _editOrder() {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: const Text(
-                        'Закрыть',
-                        style: TextStyle(
+                      child: Text(
+                        appLocalizations?.translate('close') ?? 'Закрыть',
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           fontFamily: 'Plus Jakarta Sans',
@@ -690,11 +780,14 @@ void _editOrder() {
   }
 
   Future<void> _launchUrl(String url) async {
+    final appLocalizations = AppLocalizations.of(context);
     final Uri uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         _showCustomSnackBar(
-          message: 'Не удалось открыть ссылку',
+          message:
+              appLocalizations?.translate('failed_to_open_link') ??
+              'Не удалось открыть ссылку',
           isSuccess: false,
         );
       }
@@ -702,6 +795,7 @@ void _editOrder() {
   }
 
   String _formatPrice(String price) {
+    final appLocalizations = AppLocalizations.of(context);
     try {
       final number = double.parse(price);
       final formatted = number.toStringAsFixed(0);
@@ -710,9 +804,9 @@ void _editOrder() {
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
         (match) => '${match[1]} ',
       );
-      return '$integerPart ₸';
+      return '$integerPart ${appLocalizations?.translate('tenge') ?? '₸'}';
     } catch (e) {
-      return '$price ₸';
+      return '$price ${appLocalizations?.translate('tenge') ?? '₸'}';
     }
   }
 
@@ -734,6 +828,9 @@ void _editOrder() {
 
   @override
   Widget build(BuildContext context) {
+    final appLocalizations = AppLocalizations.of(context);
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -742,8 +839,7 @@ void _editOrder() {
       ),
       child: Scaffold(
         backgroundColor: const Color(0xFFFAFAFA),
-        resizeToAvoidBottomInset:
-            false, // Предотвращает сжатие при открытии клавиатуры
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           elevation: 0,
           backgroundColor: const Color(0xFFFAFAFA),
@@ -757,7 +853,9 @@ void _editOrder() {
             onPressed: () => Navigator.pop(context),
           ),
           title: Text(
-            widget.isMyOrder ? 'Мои заказы' : 'Заказ',
+            widget.isMyOrder
+                ? appLocalizations?.translate('my_orders') ?? 'Мои заказы'
+                : appLocalizations?.translate('order') ?? 'Заказ',
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w500,
@@ -766,13 +864,17 @@ void _editOrder() {
             ),
           ),
           actions: [
+            _buildLanguageButton(context, languageProvider, appLocalizations),
             IconButton(
               onPressed: _refreshData,
               icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
             ),
           ],
         ),
-        body: _buildBody(),
+        body: FadeTransition(
+          opacity: _fadeAnimation,
+          child: _buildBody(appLocalizations),
+        ),
         bottomNavigationBar: SafeArea(
           top: false,
           minimum: const EdgeInsets.only(bottom: 0),
@@ -800,7 +902,81 @@ void _editOrder() {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildLanguageButton(
+    BuildContext context,
+    LanguageProvider languageProvider,
+    AppLocalizations? appLocalizations,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLanguageOption(
+            'RU',
+            const Locale('ru'),
+            languageProvider.locale.languageCode == 'ru',
+            languageProvider,
+            context,
+          ),
+          _buildLanguageOption(
+            'KZ',
+            const Locale('kk'),
+            languageProvider.locale.languageCode == 'kk',
+            languageProvider,
+            context,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(
+    String code,
+    Locale locale,
+    bool isActive,
+    LanguageProvider provider,
+    BuildContext context,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        provider.setLanguage(locale);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              locale.languageCode == 'ru'
+                  ? 'Язык изменен на русский'
+                  : 'Тіл қазақшаға өзгертілді',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Text(
+          code,
+          style: TextStyle(
+            color: isActive ? Colors.blue.shade700 : Colors.grey.shade600,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(AppLocalizations? appLocalizations) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -813,7 +989,8 @@ void _editOrder() {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Ошибка загрузки',
+                appLocalizations?.translate('loading_error') ??
+                    'Ошибка загрузки',
                 style: TextStyle(
                   fontSize: 18,
                   color: Colors.red[700],
@@ -829,7 +1006,9 @@ void _editOrder() {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _refreshData,
-                child: const Text('Повторить'),
+                child: Text(
+                  appLocalizations?.translate('retry') ?? 'Повторить',
+                ),
               ),
             ],
           ),
@@ -838,7 +1017,11 @@ void _editOrder() {
     }
 
     if (_order == null) {
-      return const Center(child: Text('Заказ не найден'));
+      return Center(
+        child: Text(
+          appLocalizations?.translate('order_not_found') ?? 'Заказ не найден',
+        ),
+      );
     }
 
     return RefreshIndicator(
@@ -848,7 +1031,6 @@ void _editOrder() {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Основная карточка с информацией о заказе
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -866,23 +1048,16 @@ void _editOrder() {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Информация об авторе для чужих заказов
-                    if (!widget.isMyOrder && _order?['client'] != null)
-                      Column(
-                        children: [
-                          _buildAuthorInfo(_order!['client']),
-                          const SizedBox(height: 24),
-                        ],
-                      ),
-
-                    // Галерея изображений заказа
-                    _buildImageGallery(),
-
+                    if (!widget.isMyOrder && _order?['client'] != null) ...[
+                      _buildAuthorInfo(_order!['client'], appLocalizations),
+                      const SizedBox(height: 24),
+                    ],
+                    _buildImageGallery(appLocalizations),
                     const SizedBox(height: 16),
-
-                    // Заголовок
                     Text(
-                      _order?['title'] ?? 'Нет названия',
+                      _order?['title'] ??
+                          appLocalizations?.translate('no_title') ??
+                          'Нет названия',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -890,10 +1065,7 @@ void _editOrder() {
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
-
                     const SizedBox(height: 8),
-
-                    // Категория
                     if (_order?['category'] != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -917,18 +1089,16 @@ void _editOrder() {
                           ),
                         ),
                       ),
-
                     const SizedBox(height: 16),
-
-                    // Описание
                     if (_order?['description'] != null &&
                         _order!['description'].toString().isNotEmpty)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Описание',
-                            style: TextStyle(
+                          Text(
+                            appLocalizations?.translate('description') ??
+                                'Описание',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF41454A),
@@ -948,8 +1118,6 @@ void _editOrder() {
                           const SizedBox(height: 16),
                         ],
                       ),
-
-                    // Цена
                     if (_order?['price'] != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -967,9 +1135,9 @@ void _editOrder() {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Цена:',
-                              style: TextStyle(
+                            Text(
+                              appLocalizations?.translate('price') ?? 'Цена:',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: Color(0xFF41454A),
@@ -987,41 +1155,37 @@ void _editOrder() {
                           ],
                         ),
                       ),
-
                     const SizedBox(height: 16),
-
-                    // Дополнительная информация
                     if (_order?['city'] != null)
                       _buildInfoRow(
-                        'Город:',
+                        appLocalizations?.translate('city') ?? 'Город:',
                         _order?['city']['name'] ?? '',
                         Icons.location_on_outlined,
+                        appLocalizations,
                       ),
-
                     if (_order?['address_street'] != null)
                       _buildInfoRow(
-                        'Адрес:',
+                        appLocalizations?.translate('address') ?? 'Адрес:',
                         '${_order?['address_street']}, д. ${_order?['address_house'] ?? ''}${_order?['address_apartment'] != null ? ', кв. ${_order?['address_apartment']}' : ''}',
                         Icons.home_outlined,
+                        appLocalizations,
                       ),
-
                     if (_order?['telephone'] != null)
                       _buildInfoRow(
-                        'Телефон:',
+                        appLocalizations?.translate('phone') ?? 'Телефон:',
                         _order?['telephone'],
                         Icons.phone_outlined,
+                        appLocalizations,
                       ),
-
                     if (_order?['createdAt'] != null)
                       _buildInfoRow(
-                        'Дата публикации:',
+                        appLocalizations?.translate('publication_date') ??
+                            'Дата публикации:',
                         _formatDate(_order?['createdAt']),
                         Icons.calendar_today_outlined,
+                        appLocalizations,
                       ),
-
                     const SizedBox(height: 16),
-
-                    // Статус заказа
                     Row(
                       children: [
                         Container(
@@ -1047,7 +1211,10 @@ void _editOrder() {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                _getStatusText(_order?['status']),
+                                _getStatusText(
+                                  _order?['status'],
+                                  appLocalizations,
+                                ),
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -1060,25 +1227,19 @@ void _editOrder() {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 24),
-
-                    // Футер с кнопками в зависимости от типа просмотра
                     if (widget.isMyOrder)
-                      _buildMyOrderFooter()
+                      _buildMyOrderFooter(appLocalizations)
                     else
-                      _buildOtherOrderFooter(),
-
-                    // Секция просмотров для своих заказов
+                      _buildOtherOrderFooter(appLocalizations),
                     if (widget.isMyOrder) ...[
-                      _buildViewsSection(),
+                      _buildViewsSection(appLocalizations),
                       const SizedBox(height: 24),
                     ],
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 32),
           ],
         ),
@@ -1086,7 +1247,7 @@ void _editOrder() {
     );
   }
 
-  Widget _buildImageGallery() {
+  Widget _buildImageGallery(AppLocalizations? appLocalizations) {
     final List<dynamic> images = _order?['images'] ?? [];
 
     if (images.isEmpty) {
@@ -1107,7 +1268,7 @@ void _editOrder() {
             ),
             const SizedBox(height: 8),
             Text(
-              'Нет изображений',
+              appLocalizations?.translate('no_images') ?? 'Нет изображений',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey[600],
@@ -1121,24 +1282,18 @@ void _editOrder() {
 
     return Column(
       children: [
-        // Основное изображение с PageView
         Container(
           height: 250,
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
           child: Stack(
             children: [
-              // PageView для пролистывания
               PageView.builder(
                 controller: _pageController,
                 itemCount: images.length,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentImageIndex = index;
-                  });
-                },
+                onPageChanged: (index) =>
+                    setState(() => _currentImageIndex = index),
                 itemBuilder: (context, index) {
                   final imageUrl = _getFullImageUrl(images[index].toString());
-
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.network(
@@ -1158,7 +1313,10 @@ void _editOrder() {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Ошибка загрузки',
+                                appLocalizations?.translate(
+                                      'image_load_error',
+                                    ) ??
+                                    'Ошибка загрузки',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey[600],
@@ -1172,10 +1330,7 @@ void _editOrder() {
                   );
                 },
               ),
-
-              // Кнопки навигации (если больше 1 изображения)
               if (images.length > 1) ...[
-                // Кнопка "Назад"
                 Positioned(
                   left: 8,
                   top: 0,
@@ -1213,8 +1368,6 @@ void _editOrder() {
                     ),
                   ),
                 ),
-
-                // Кнопка "Вперед"
                 Positioned(
                   right: 8,
                   top: 0,
@@ -1252,8 +1405,6 @@ void _editOrder() {
                     ),
                   ),
                 ),
-
-                // Индикатор количества изображений
                 Positioned(
                   bottom: 8,
                   right: 8,
@@ -1280,8 +1431,6 @@ void _editOrder() {
             ],
           ),
         ),
-
-        // Миниатюры (если больше 1 изображения)
         if (images.length > 1) ...[
           const SizedBox(height: 12),
           SizedBox(
@@ -1292,7 +1441,6 @@ void _editOrder() {
               itemBuilder: (context, index) {
                 final imageUrl = _getFullImageUrl(images[index].toString());
                 final isSelected = index == _currentImageIndex;
-
                 return GestureDetector(
                   onTap: () {
                     _pageController.animateToPage(
@@ -1341,10 +1489,12 @@ void _editOrder() {
     );
   }
 
-  Widget _buildAuthorInfo(Map<String, dynamic> author) {
+  Widget _buildAuthorInfo(
+    Map<String, dynamic> author,
+    AppLocalizations? appLocalizations,
+  ) {
     final String fullName =
         '${author['firstname'] ?? ''} ${author['lastname'] ?? ''}'.trim();
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1353,7 +1503,6 @@ void _editOrder() {
       ),
       child: Row(
         children: [
-          // Аватар автора
           CircleAvatar(
             radius: 24,
             backgroundColor: const Color(0xFFE0E0E0),
@@ -1365,13 +1514,14 @@ void _editOrder() {
                 : null,
           ),
           const SizedBox(width: 12),
-          // Информация об авторе
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  fullName.isNotEmpty ? fullName : 'Пользователь',
+                  fullName.isNotEmpty
+                      ? fullName
+                      : appLocalizations?.translate('user') ?? 'Пользователь',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -1395,7 +1545,6 @@ void _editOrder() {
               ],
             ),
           ),
-          // Количество заказов автора (если есть)
           if (author['orders_count'] != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1404,7 +1553,7 @@ void _editOrder() {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
-                '${author['orders_count']} заказов',
+                '${author['orders_count']} ${appLocalizations?.translate('orders') ?? 'заказов'}',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368)),
               ),
             ),
@@ -1413,7 +1562,7 @@ void _editOrder() {
     );
   }
 
-  Widget _buildMyOrderFooter() {
+  Widget _buildMyOrderFooter(AppLocalizations? appLocalizations) {
     return Container(
       padding: const EdgeInsets.only(top: 16),
       decoration: const BoxDecoration(
@@ -1421,7 +1570,6 @@ void _editOrder() {
       ),
       child: Row(
         children: [
-          // Кнопка "Отозвать" для активных заказов
           if (_order?['status'] == 'active')
             Expanded(
               child: OutlinedButton(
@@ -1435,9 +1583,9 @@ void _editOrder() {
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: const Text(
-                  'Отозвать',
-                  style: TextStyle(
+                child: Text(
+                  appLocalizations?.translate('withdraw') ?? 'Отозвать',
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'Plus Jakarta Sans',
@@ -1445,10 +1593,7 @@ void _editOrder() {
                 ),
               ),
             ),
-
           if (_order?['status'] == 'active') const SizedBox(width: 8),
-
-          // Кнопка меню
           Expanded(
             child: OutlinedButton(
               onPressed: _showOrderOptionsModal,
@@ -1471,9 +1616,9 @@ void _editOrder() {
                     color: const Color(0xFF5F6368),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Ещё',
-                    style: TextStyle(
+                  Text(
+                    appLocalizations?.translate('more') ?? 'Ещё',
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       fontFamily: 'Plus Jakarta Sans',
@@ -1488,7 +1633,7 @@ void _editOrder() {
     );
   }
 
-  Widget _buildOtherOrderFooter() {
+  Widget _buildOtherOrderFooter(AppLocalizations? appLocalizations) {
     return Container(
       padding: const EdgeInsets.only(top: 16),
       decoration: const BoxDecoration(
@@ -1496,7 +1641,6 @@ void _editOrder() {
       ),
       child: Row(
         children: [
-          // Кнопка "Связаться"
           Expanded(
             child: OutlinedButton(
               onPressed: _contactAuthor,
@@ -1514,9 +1658,9 @@ void _editOrder() {
                 children: [
                   const Icon(Icons.chat_bubble_outline, size: 20),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Связаться',
-                    style: TextStyle(
+                  Text(
+                    appLocalizations?.translate('contact') ?? 'Связаться',
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       fontFamily: 'Plus Jakarta Sans',
@@ -1531,7 +1675,7 @@ void _editOrder() {
     );
   }
 
-  Widget _buildViewsSection() {
+  Widget _buildViewsSection(AppLocalizations? appLocalizations) {
     final views = _order?['views'] as List?;
 
     if (views == null || views.isEmpty) {
@@ -1565,9 +1709,10 @@ void _editOrder() {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Пока никто не просмотрел',
-              style: TextStyle(
+            Text(
+              appLocalizations?.translate('no_views_yet') ??
+                  'Пока никто не просмотрел',
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF757575),
@@ -1575,10 +1720,11 @@ void _editOrder() {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Когда мастера проявят интерес,\nони появятся здесь',
+            Text(
+              appLocalizations?.translate('views_will_appear') ??
+                  'Когда мастера проявят интерес,\nони появятся здесь',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF9E9E9E),
                 fontFamily: 'Plus Jakarta Sans',
@@ -1605,7 +1751,6 @@ void _editOrder() {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Заголовок с количеством просмотров
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
@@ -1628,7 +1773,7 @@ void _editOrder() {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Просмотры',
+                        appLocalizations?.translate('views') ?? 'Просмотры',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -1638,7 +1783,7 @@ void _editOrder() {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${views.length} ${_getViewsWord(views.length)}',
+                        '${views.length} ${_getViewsWord(views.length, appLocalizations)}',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Color(0xFF757575),
@@ -1651,10 +1796,7 @@ void _editOrder() {
               ],
             ),
           ),
-
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
-
-          // Список просмотров
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -1675,7 +1817,6 @@ void _editOrder() {
                   ),
                   child: Row(
                     children: [
-                      // Аватар мастера
                       Container(
                         width: 48,
                         height: 48,
@@ -1695,10 +1836,7 @@ void _editOrder() {
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 12),
-
-                      // Информация о мастере
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1726,10 +1864,11 @@ void _editOrder() {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    'Мастер',
-                                    style: TextStyle(
+                                    appLocalizations?.translate('master') ??
+                                        'Мастер',
+                                    style: const TextStyle(
                                       fontSize: 11,
-                                      color: const Color(0xFF757575),
+                                      color: Color(0xFF757575),
                                       fontFamily: 'Plus Jakarta Sans',
                                     ),
                                   ),
@@ -1754,8 +1893,6 @@ void _editOrder() {
                           ],
                         ),
                       ),
-
-                      // Стрелка для перехода
                       Container(
                         width: 32,
                         height: 32,
@@ -1780,17 +1917,23 @@ void _editOrder() {
     );
   }
 
-  String _getViewsWord(int count) {
-    if (count % 10 == 1 && count % 100 != 11) return 'просмотр';
+  String _getViewsWord(int count, AppLocalizations? appLocalizations) {
+    if (count % 10 == 1 && count % 100 != 11)
+      return appLocalizations?.translate('view') ?? 'просмотр';
     if (count % 10 >= 2 &&
         count % 10 <= 4 &&
         (count % 100 < 10 || count % 100 >= 20)) {
-      return 'просмотра';
+      return appLocalizations?.translate('views_few') ?? 'просмотра';
     }
-    return 'просмотров';
+    return appLocalizations?.translate('views_many') ?? 'просмотров';
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon) {
+  Widget _buildInfoRow(
+    String label,
+    String value,
+    IconData icon,
+    AppLocalizations? appLocalizations,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -1827,7 +1970,6 @@ void _editOrder() {
     );
   }
 
-  // Вспомогательные методы для статусов
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'active':
@@ -1888,18 +2030,18 @@ void _editOrder() {
     }
   }
 
-  String _getStatusText(String? status) {
+  String _getStatusText(String? status, AppLocalizations? appLocalizations) {
     switch (status) {
       case 'active':
-        return 'Активен';
+        return appLocalizations?.translate('active') ?? 'Активен';
       case 'completed':
-        return 'Завершен';
+        return appLocalizations?.translate('completed') ?? 'Завершен';
       case 'canceled':
-        return 'Отменен';
+        return appLocalizations?.translate('canceled') ?? 'Отменен';
       case 'archived':
-        return 'Архивирован';
+        return appLocalizations?.translate('archived') ?? 'Архивирован';
       default:
-        return status ?? 'Неизвестно';
+        return status ?? appLocalizations?.translate('unknown') ?? 'Неизвестно';
     }
   }
 }

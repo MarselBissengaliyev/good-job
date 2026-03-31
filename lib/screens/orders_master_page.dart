@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:goodjob/custom_bottom_navbar.dart';
 import 'package:goodjob/screens/account_page.dart';
-import 'package:goodjob/screens/order_client_page.dart'; // Добавлен импорт
+import 'package:goodjob/screens/order_client_page.dart';
 import 'package:goodjob/services/api_service.dart';
 import 'package:goodjob/services/common/profile_api.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../localization/app_localizations.dart';
+import '../providers/language_provider.dart';
 
 class OrdersMasterPage extends StatefulWidget {
   const OrdersMasterPage({super.key});
@@ -14,26 +18,25 @@ class OrdersMasterPage extends StatefulWidget {
   State<OrdersMasterPage> createState() => _OrdersMasterPageState();
 }
 
-class _OrdersMasterPageState extends State<OrdersMasterPage> {
-  // Списки для заказов
+class _OrdersMasterPageState extends State<OrdersMasterPage>
+    with SingleTickerProviderStateMixin {
   List<dynamic> _orders = [];
   List<dynamic> _filteredOrders = [];
   bool _isLoading = true;
+  bool _initialized = false; // Add this flag
   String _errorMessage = '';
 
-  // Значения для селектов
-  String? _selectedCategory = 'Все категории';
-  String? _selectedPrice = 'Любая стоимость';
+  String? _selectedCategory;
+  String? _selectedPrice;
   DateTime? _selectedDate;
 
   final ProfileApi _profileApi = ProfileApi();
   Map<String, dynamic>? _userData;
   bool _isLoadingUser = true;
-
-  // Списки для выпадающих меню - ИЗМЕНЕНО: теперь храним объекты категорий
+  bool _userDataLoaded = false;
+  bool _hasSubscription = false;
   List<Map<String, dynamic>> _categories = [];
 
-  // Для управления модалками
   OverlayEntry? _categoryOverlayEntry;
   OverlayEntry? _priceOverlayEntry;
   final LayerLink _categoryLayerLink = LayerLink();
@@ -41,14 +44,21 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
   final GlobalKey _categoryKey = GlobalKey();
   final GlobalKey _priceKey = GlobalKey();
 
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  String? _selectedCategoryRaw;
+  String? _selectedPriceRaw;
+
   @override
   void initState() {
     super.initState();
-    _loadCategories();
-    _fetchOrders();
-        _loadUserProfile(); // ДОБАВЛЕНО
+    _selectedCategoryRaw = 'all_categories';
+    _selectedPriceRaw = 'any_price';
 
-    // Устанавливаем цвет системной навигации
+    // Don't call methods that use AppLocalizations here
+    _initAnimation();
+
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Color(0xFFFAFAFA),
@@ -57,116 +67,200 @@ class _OrdersMasterPageState extends State<OrdersMasterPage> {
     );
   }
 
-   Future<void> _loadUserProfile() async {
-    try {
-      final response = await _profileApi.getProfile();
-      if (mounted) {
-        setState(() {
-          _userData = response['data'];
-          _isLoadingUser = false;
-        });
-        print('✅ Загружены данные пользователя');
-        print('📱 Подписки: ${_userData?['subscriptions']}');
-      }
-    } on UnauthorizedException catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingUser = false);
-        _showError('Сессия истекла. Пожалуйста, войдите снова.');
-        // Можно перенаправить на страницу входа
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingUser = false);
-        _showError('Ошибка загрузки профиля: ${e.message}');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingUser = false);
-        _showError('Неизвестная ошибка при загрузке профиля');
-      }
-      print('❌ Ошибка загрузки профиля: $e');
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Initialize after dependencies are resolved
+    if (!_initialized) {
+      _initialized = true;
+      _loadUserProfile();
+      _loadCategories();
+      _fetchOrders();
     }
   }
 
-
-bool _hasActiveSubscription() {
-  print("TEST $_userData");
-    if (_userData == null) return false;
-    
-    try {
-      final subscriptions = _userData?['subscriptions'] as List?;
-      
-      // Если нет подписок
-      if (subscriptions == null || subscriptions.isEmpty) {
-        return false;
-      }
-      
-      // Берем первую подписку (обычно она одна активная)
-      final subscription = subscriptions.first;
-      
-      // Проверяем, есть ли поле endAt
-      if (subscription['endAt'] == null) {
-        return false;
-      }
-      
-      // Парсим дату окончания
-      final endAtStr = subscription['endAt'] as String;
-      final endAt = DateTime.parse(endAtStr);
-      final now = DateTime.now();
-      
-      // Проверяем, не истекла ли подписка
-      // Добавляем небольшой запас в 1 день, чтобы учитывать часовые пояса
-      final isActive = endAt.isAfter(now.subtract(const Duration(days: 1)));
-      
-      print('📅 Подписка до: $endAt, активна: $isActive');
-      
-      return isActive;
-      
-    } catch (e) {
-      print('❌ Ошибка при проверке подписки: $e');
-      return false;
-    }
+  void _initAnimation() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _animationController.forward();
   }
 
   @override
   void dispose() {
     _removeCategoryOverlay();
     _removePriceOverlay();
-
-    // Возвращаем стандартные настройки при выходе
+    _animationController.dispose();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.black,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-
     super.dispose();
   }
 
+  void _updateFilterDisplayValues() {
+    final appLocalizations = AppLocalizations.of(context);
+    setState(() {
+      _selectedCategory = _getLocalizedCategory(
+        _selectedCategoryRaw,
+        appLocalizations,
+      );
+      _selectedPrice = _getLocalizedPrice(_selectedPriceRaw, appLocalizations);
+    });
+  }
+
+  String _getLocalizedCategory(
+    String? rawValue,
+    AppLocalizations? appLocalizations,
+  ) {
+    if (rawValue == null)
+      return appLocalizations?.translate('all_categories') ?? 'Все категории';
+    if (rawValue == 'all_categories') {
+      return appLocalizations?.translate('all_categories') ?? 'Все категории';
+    }
+    return rawValue;
+  }
+
+  String _getLocalizedPrice(
+    String? rawValue,
+    AppLocalizations? appLocalizations,
+  ) {
+    if (rawValue == null)
+      return appLocalizations?.translate('any_price') ?? 'Любая стоимость';
+    if (rawValue == 'any_price') {
+      return appLocalizations?.translate('any_price') ?? 'Любая стоимость';
+    }
+    return rawValue;
+  }
+
+  // Update methods that use AppLocalizations to check if mounted
+  Future<void> _loadUserProfile() async {
+    // Check if mounted before using context
+    if (!mounted) return;
+
+    final appLocalizations = AppLocalizations.of(context);
+    print('🔄 Начало загрузки профиля пользователя...');
+
+    try {
+      final response = await _profileApi.getProfile();
+      print('✅ Получен ответ от API: $response');
+
+      if (mounted) {
+        final user = response['data'];
+        print('📱 Данные пользователя: $user');
+        print('📋 Подписки: ${user['subscriptions']}');
+
+        // Проверяем наличие активной подписки
+        bool hasActiveSub = false;
+        final subscriptions = user['subscriptions'] as List?;
+        if (subscriptions != null && subscriptions.isNotEmpty) {
+          final subscription = subscriptions.first;
+          if (subscription['endAt'] != null) {
+            final endAt = DateTime.parse(subscription['endAt'] as String);
+            final now = DateTime.now();
+            hasActiveSub = endAt.isAfter(now.subtract(const Duration(days: 1)));
+            print('📅 Подписка до: $endAt, активна: $hasActiveSub');
+          }
+        }
+
+        setState(() {
+          _userData = user;
+          _isLoadingUser = false;
+          _userDataLoaded = true;
+          _hasSubscription = hasActiveSub;
+        });
+
+        print('✅ Профиль загружен, подписка активна: $_hasSubscription');
+      }
+    } on UnauthorizedException catch (e) {
+      print('❌ Ошибка авторизации: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingUser = false;
+          _userDataLoaded = true;
+          _hasSubscription = false;
+        });
+        _showError(
+          appLocalizations?.translate('session_expired') ?? 'Сессия истекла',
+        );
+      }
+    } on ApiException catch (e) {
+      print('❌ API ошибка: ${e.message}');
+      if (mounted) {
+        setState(() {
+          _isLoadingUser = false;
+          _userDataLoaded = true;
+          _hasSubscription = false;
+        });
+        _showError(
+          '${appLocalizations?.translate('error_loading_profile') ?? 'Ошибка загрузки профиля'}: ${e.message}',
+        );
+      }
+    } catch (e) {
+      print('❌ Неизвестная ошибка: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingUser = false;
+          _userDataLoaded = true;
+          _hasSubscription = false;
+        });
+        _showError(
+          appLocalizations?.translate('unknown_error') ?? 'Неизвестная ошибка',
+        );
+      }
+    }
+  }
+
+  bool _hasActiveSubscription() {
+    print(
+      '🔍 Проверка подписки: _userDataLoaded=$_userDataLoaded, _hasSubscription=$_hasSubscription',
+    );
+    return _userDataLoaded && _hasSubscription;
+  }
+
   Future<void> _loadCategories() async {
+    // Check if mounted before using context
+    if (!mounted) return;
+
+    final appLocalizations = AppLocalizations.of(context);
     try {
       final categories = await ApiService.getCategories();
-      setState(() {
-        _categories = List<Map<String, dynamic>>.from(categories);
-      });
+      if (mounted) {
+        setState(() {
+          _categories = List<Map<String, dynamic>>.from(categories);
+        });
+        _updateFilterDisplayValues();
+      }
     } catch (e) {
-      _showError('Ошибка загрузки категорий: $e');
+      _showError(
+        '${appLocalizations?.translate('error_loading_categories') ?? 'Ошибка загрузки категорий'}: $e',
+      );
     }
   }
 
   void _showError(String message) {
-    // Если сообщение слишком длинное, показываем его в диалоге
+    // Check if mounted before using context
+    if (!mounted) return;
+
+    final appLocalizations = AppLocalizations.of(context);
     if (message.length > 100) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Ошибка'),
+          title: Text(appLocalizations?.translate('error') ?? 'Ошибка'),
           content: SingleChildScrollView(child: Text(message)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+              child: Text(appLocalizations?.translate('ok') ?? 'OK'),
             ),
           ],
         ),
@@ -184,8 +278,9 @@ bool _hasActiveSubscription() {
     }
   }
 
-  // Функция для получения заказов с сервера
   Future<void> _fetchOrders() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -193,130 +288,123 @@ bool _hasActiveSubscription() {
 
     try {
       Map<String, dynamic> response;
-
-      // Если выбрана дата, передаём её в API
       if (_selectedDate != null) {
-        // Создаем даты для начала и конца выбранного дня
         final startOfDay = DateTime(
           _selectedDate!.year,
           _selectedDate!.month,
           _selectedDate!.day,
           0,
-          0, // 00:00
+          0,
         );
         final endOfDay = DateTime(
           _selectedDate!.year,
           _selectedDate!.month,
           _selectedDate!.day,
           23,
-          59, // 23:59
+          59,
         );
-
         response = await ApiService.getOrders(
           startDate: startOfDay,
           endDate: endOfDay,
         );
       } else {
-        // Если дата не выбрана, получаем все заказы
         response = await ApiService.getOrders();
       }
 
       final List<dynamic> orders = response['data'] ?? [];
-      print("orders $orders");
 
-      setState(() {
-        _orders = orders;
-        _filteredOrders = List.from(orders);
-        _isLoading = false;
-      });
-
-      // После загрузки применяем локальные фильтры (категория и цена)
-      _applyLocalFilters();
+      if (mounted) {
+        setState(() {
+          _orders = orders;
+          _filteredOrders = List.from(orders);
+          _isLoading = false;
+        });
+        _applyLocalFilters();
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
     }
   }
 
   void _applyLocalFilters() {
-    List<dynamic> filtered = List.from(_orders);
+    if (!mounted) return;
 
-    // Фильтрация по категории
-    if (_selectedCategory != null && _selectedCategory != 'Все категории') {
+    List<dynamic> filtered = List.from(_orders);
+    final appLocalizations = AppLocalizations.of(context);
+
+    final isAllCategories = _selectedCategoryRaw == 'all_categories';
+    final isAnyPrice = _selectedPriceRaw == 'any_price';
+
+    if (!isAllCategories && _selectedCategoryRaw != null) {
       filtered = filtered.where((order) {
         final category = order['category']?['name']?.toString() ?? '';
         return category.toLowerCase().contains(
-          _selectedCategory!.toLowerCase(),
+          _selectedCategoryRaw!.toLowerCase(),
         );
       }).toList();
     }
 
-    // Фильтрация по стоимости
-    if (_selectedPrice != null && _selectedPrice != 'Любая стоимость') {
-      if (_selectedPrice!.contains('-')) {
-        try {
-          final priceRange = _selectedPrice!.replaceAll(' тг', '').split('-');
-          final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
-          final maxPrice =
-              double.tryParse(priceRange[1].trim()) ?? double.infinity;
-
-          filtered = filtered.where((order) {
-            final priceStr = order['price']?.toString() ?? '0';
-            final price = double.tryParse(priceStr) ?? 0;
-            return price >= minPrice && price <= maxPrice;
-          }).toList();
-        } catch (e) {
-          print('Ошибка при парсинге диапазона цен: $e');
-        }
-      }
+    if (!isAnyPrice &&
+        _selectedPriceRaw != null &&
+        _selectedPriceRaw!.contains('-')) {
+      try {
+        final priceRange = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
+        final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
+        final maxPrice =
+            double.tryParse(priceRange[1].trim()) ?? double.infinity;
+        filtered = filtered.where((order) {
+          final priceStr = order['price']?.toString() ?? '0';
+          final price = double.tryParse(priceStr) ?? 0;
+          return price >= minPrice && price <= maxPrice;
+        }).toList();
+      } catch (e) {}
     }
 
-    setState(() {
-      _filteredOrders = filtered;
-    });
+    setState(() => _filteredOrders = filtered);
   }
 
-  // Функция для фильтрации заказов
   void _applyFilters() {
-    List<dynamic> filtered = List.from(_orders);
+    if (!mounted) return;
 
-    // Фильтрация по категории
-    if (_selectedCategory != null && _selectedCategory != 'Все категории') {
+    List<dynamic> filtered = List.from(_orders);
+    final appLocalizations = AppLocalizations.of(context);
+
+    final isAllCategories = _selectedCategoryRaw == 'all_categories';
+    final isAnyPrice = _selectedPriceRaw == 'any_price';
+
+    if (!isAllCategories && _selectedCategoryRaw != null) {
       filtered = filtered.where((order) {
         final category = order['category']?['name']?.toString() ?? '';
         return category.toLowerCase().contains(
-          _selectedCategory!.toLowerCase(),
+          _selectedCategoryRaw!.toLowerCase(),
         );
       }).toList();
     }
 
-    // Фильтрация по стоимости
-    if (_selectedPrice != null && _selectedPrice != 'Любая стоимость') {
-      if (_selectedPrice!.contains('-')) {
-        try {
-          final priceRange = _selectedPrice!.replaceAll(' тг', '').split('-');
-          final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
-          final maxPrice =
-              double.tryParse(priceRange[1].trim()) ?? double.infinity;
-
-          filtered = filtered.where((order) {
-            final priceStr = order['price']?.toString() ?? '0';
-            final price = double.tryParse(priceStr) ?? 0;
-            return price >= minPrice && price <= maxPrice;
-          }).toList();
-        } catch (e) {
-          print('Ошибка при парсинге диапазона цен: $e');
-        }
-      }
+    if (!isAnyPrice &&
+        _selectedPriceRaw != null &&
+        _selectedPriceRaw!.contains('-')) {
+      try {
+        final priceRange = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
+        final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
+        final maxPrice =
+            double.tryParse(priceRange[1].trim()) ?? double.infinity;
+        filtered = filtered.where((order) {
+          final priceStr = order['price']?.toString() ?? '0';
+          final price = double.tryParse(priceStr) ?? 0;
+          return price >= minPrice && price <= maxPrice;
+        }).toList();
+      } catch (e) {}
     }
 
-    // Фильтрация по дате
     if (_selectedDate != null) {
       filtered = filtered.where((order) {
         if (order['created_at'] == null) return false;
-
         try {
           final orderDate = DateTime.parse(order['created_at']);
           return orderDate.year == _selectedDate!.year &&
@@ -328,76 +416,82 @@ bool _hasActiveSubscription() {
       }).toList();
     }
 
-    setState(() {
-      _filteredOrders = filtered;
-    });
+    setState(() => _filteredOrders = filtered);
   }
 
   Future<void> _launchUrl(String url) async {
     final Uri uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
+        final appLocalizations = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось открыть ссылку: $url')),
+          SnackBar(
+            content: Text(
+              '${appLocalizations?.translate('failed_to_open_link') ?? 'Не удалось открыть ссылку'}: $url',
+            ),
+          ),
         );
       }
     }
   }
 
-  // Функция для сброса фильтров
   void _resetFilters() {
+    final appLocalizations = AppLocalizations.of(context);
     setState(() {
-      _selectedCategory = 'Все категории';
-      _selectedPrice = 'Любая стоимость';
+      _selectedCategoryRaw = 'all_categories';
+      _selectedPriceRaw = 'any_price';
+      _selectedCategory =
+          appLocalizations?.translate('all_categories') ?? 'Все категории';
+      _selectedPrice =
+          appLocalizations?.translate('any_price') ?? 'Любая стоимость';
       _selectedDate = null;
     });
     _removeCategoryOverlay();
     _removePriceOverlay();
-    // Загружаем все заказы без фильтрации по дате
     _fetchOrders();
   }
 
-  // ДОБАВЛЕНО: Функция для перехода на страницу заказа
   void _navigateToOrderDetail(Map<String, dynamic> order) {
-    // Если данные пользователя еще загружаются
-    if (_isLoadingUser) {
+    final appLocalizations = AppLocalizations.of(context);
+
+    print(
+      '🔍 Переход к заказу: _userDataLoaded=$_userDataLoaded, _hasSubscription=$_hasSubscription',
+    );
+
+    // Если данные пользователя еще не загружены
+    if (!_userDataLoaded) {
+      print('⏳ Данные пользователя еще загружаются...');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Проверка подписки...'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(
+            appLocalizations?.translate('loading_profile') ??
+                'Загрузка профиля...',
+          ),
+          duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
 
-    
-    // Проверяем наличие активной подписки
-    if (!_hasActiveSubscription()) {
-      // Если подписки нет - открываем Kaspi QR
-      _launchUrl('https://qr.kaspi.kz/19134627698424934147714893150004931409130');
-      
-      return;
-    }
-    
-    // Получаем ID заказа
     final orderId = order['id']?.toString();
-
     if (orderId != null && orderId.isNotEmpty) {
+      print('✅ Открываем заказ с ID: $orderId');
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => OrderClientPage(
-            orderId: orderId,
-            isMyOrder: false,
-          ),
+          builder: (context) =>
+              OrderClientPage(orderId: orderId, isMyOrder: false),
         ),
       );
     } else {
-      // Если ID не найден, показываем ошибку
+      print('❌ ID заказа не найден');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ошибка: ID заказа не найден'),
+        SnackBar(
+          content: Text(
+            appLocalizations?.translate('order_id_not_found') ??
+                'ID заказа не найден',
+          ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -405,8 +499,43 @@ bool _hasActiveSubscription() {
     }
   }
 
-  // Функция для показа номера телефона
   void _showPhoneNumber(String phoneNumber) {
+    final appLocalizations = AppLocalizations.of(context);
+
+    print(
+      '🔍 Показ телефона: _userDataLoaded=$_userDataLoaded, _hasSubscription=$_hasSubscription',
+    );
+
+    // Если данные пользователя еще не загружены
+    if (!_userDataLoaded) {
+      print('⏳ Данные пользователя еще загружаются...');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            appLocalizations?.translate('loading_profile') ??
+                'Загрузка профиля...',
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Проверяем наличие активной подписки
+    final hasSubscription = _hasActiveSubscription();
+    print('🔍 Проверка подписки при показе телефона: $hasSubscription');
+
+    if (!hasSubscription) {
+      print('❌ Нет активной подписки, открываем QR код');
+      _launchUrl(
+        'https://qr.kaspi.kz/19134627698424934147714893150004931409130',
+      );
+      return;
+    }
+
+    // Если подписка есть - показываем номер телефона
+    print('✅ Подписка активна, показываем телефон: $phoneNumber');
     showDialog(
       context: context,
       builder: (context) {
@@ -426,9 +555,10 @@ bool _hasActiveSubscription() {
                   color: Color(0xFF0F7EDE),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Контактный телефон',
-                  style: TextStyle(
+                Text(
+                  appLocalizations?.translate('contact_phone') ??
+                      'Контактный телефон',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF41454A),
@@ -436,9 +566,10 @@ bool _hasActiveSubscription() {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Номер телефона клиента',
-                  style: TextStyle(
+                Text(
+                  appLocalizations?.translate('client_phone_number') ??
+                      'Номер телефона клиента',
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF5F6368),
                     fontFamily: 'Plus Jakarta Sans',
@@ -453,7 +584,7 @@ bool _hasActiveSubscription() {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FBFF),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Color(0xFFE3F2FD)),
+                    border: Border.all(color: const Color(0xFFE3F2FD)),
                   ),
                   child: Text(
                     phoneNumber,
@@ -470,9 +601,7 @@ bool _hasActiveSubscription() {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
+                        onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: const Color(0xFF5F6368),
@@ -485,7 +614,9 @@ bool _hasActiveSubscription() {
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                        child: const Text('Закрыть'),
+                        child: Text(
+                          appLocalizations?.translate('close') ?? 'Закрыть',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -504,7 +635,9 @@ bool _hasActiveSubscription() {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           elevation: 0,
                         ),
-                        child: const Text('Позвонить'),
+                        child: Text(
+                          appLocalizations?.translate('call') ?? 'Позвонить',
+                        ),
                       ),
                     ),
                   ],
@@ -517,7 +650,6 @@ bool _hasActiveSubscription() {
     );
   }
 
-  // Управление оверлеями для категории
   void _toggleCategoryOverlay() {
     if (_categoryOverlayEntry != null) {
       _removeCategoryOverlay();
@@ -527,8 +659,8 @@ bool _hasActiveSubscription() {
     }
   }
 
-  // ИСПРАВЛЕНО: метод для отображения категорий
   void _showCategoryOverlay() {
+    final appLocalizations = AppLocalizations.of(context);
     final renderBox =
         _categoryKey.currentContext?.findRenderObject() as RenderBox?;
     final size = renderBox?.size ?? Size.zero;
@@ -563,14 +695,14 @@ bool _hasActiveSubscription() {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Заголовок
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
                     child: Row(
                       children: [
-                        const Text(
-                          'Категория',
-                          style: TextStyle(
+                        Text(
+                          appLocalizations?.translate('category') ??
+                              'Категория',
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF41454A),
@@ -597,15 +729,15 @@ bool _hasActiveSubscription() {
                       ],
                     ),
                   ),
-
-                  // ИСПРАВЛЕНО: Список категорий с опцией "Все категории"
                   Flexible(
                     child: ListView(
                       shrinkWrap: true,
                       children: [
-                        // Опция "Все категории"
-                        _buildCategoryItem('Все категории', 'Все категории'),
-                        // Категории из API
+                        _buildCategoryItem(
+                          'all_categories',
+                          appLocalizations?.translate('all_categories') ??
+                              'Все категории',
+                        ),
                         ..._categories
                             .map(
                               (category) => _buildCategoryItem(
@@ -624,15 +756,16 @@ bool _hasActiveSubscription() {
         ),
       ),
     );
-
     Overlay.of(context).insert(_categoryOverlayEntry!);
   }
 
-  // ИСПРАВЛЕНО: метод для построения элемента категории
-  Widget _buildCategoryItem(String? categoryValue, String displayName) {
+  Widget _buildCategoryItem(String rawValue, String displayName) {
+    final isSelected = _selectedCategoryRaw == rawValue;
+
     return GestureDetector(
       onTap: () {
         setState(() {
+          _selectedCategoryRaw = rawValue;
           _selectedCategory = displayName;
         });
         _applyFilters();
@@ -642,7 +775,7 @@ bool _hasActiveSubscription() {
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          border: _selectedCategory == displayName
+          border: isSelected
               ? const Border(
                   left: BorderSide(color: Color(0xFF0F7EDE), width: 3),
                 )
@@ -656,16 +789,14 @@ bool _hasActiveSubscription() {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: _selectedCategory == displayName
+                  color: isSelected
                       ? const Color(0xFF0F7EDE)
                       : const Color(0xFFCBCDCE),
                   width: 1.5,
                 ),
-                color: _selectedCategory == displayName
-                    ? const Color(0xFF0F7EDE)
-                    : Colors.white,
+                color: isSelected ? const Color(0xFF0F7EDE) : Colors.white,
               ),
-              child: _selectedCategory == displayName
+              child: isSelected
                   ? const Icon(Icons.check, size: 12, color: Colors.white)
                   : null,
             ),
@@ -675,7 +806,7 @@ bool _hasActiveSubscription() {
                 displayName,
                 style: TextStyle(
                   fontSize: 14,
-                  color: _selectedCategory == displayName
+                  color: isSelected
                       ? const Color(0xFF0F7EDE)
                       : const Color(0xFF41454A),
                   fontFamily: 'Plus Jakarta Sans',
@@ -693,7 +824,6 @@ bool _hasActiveSubscription() {
     _categoryOverlayEntry = null;
   }
 
-  // Управление оверлеями для стоимости
   void _togglePriceOverlay() {
     if (_priceOverlayEntry != null) {
       _removePriceOverlay();
@@ -704,6 +834,7 @@ bool _hasActiveSubscription() {
   }
 
   void _showPriceOverlay() {
+    final appLocalizations = AppLocalizations.of(context);
     final renderBox =
         _priceKey.currentContext?.findRenderObject() as RenderBox?;
     final size = renderBox?.size ?? Size.zero;
@@ -713,6 +844,14 @@ bool _hasActiveSubscription() {
     double maxValue = 100000;
     double currentMinValue = 0;
     double currentMaxValue = 100000;
+
+    if (_selectedPriceRaw != null &&
+        _selectedPriceRaw != 'any_price' &&
+        _selectedPriceRaw!.contains('-')) {
+      final parts = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
+      currentMinValue = double.tryParse(parts[0].trim()) ?? 0;
+      currentMaxValue = double.tryParse(parts[1].trim()) ?? 100000;
+    }
 
     _priceOverlayEntry = OverlayEntry(
       builder: (context) => Positioned(
@@ -745,14 +884,14 @@ bool _hasActiveSubscription() {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Заголовок
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
                         child: Row(
                           children: [
-                            const Text(
-                              'Стоимость',
-                              style: TextStyle(
+                            Text(
+                              appLocalizations?.translate('price') ??
+                                  'Стоимость',
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF41454A),
@@ -779,14 +918,11 @@ bool _hasActiveSubscription() {
                           ],
                         ),
                       ),
-
-                      // Диапазон цен
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Текстовые поля
                             Row(
                               children: [
                                 Expanded(
@@ -800,8 +936,17 @@ bool _hasActiveSubscription() {
                                     ),
                                     child: TextField(
                                       keyboardType: TextInputType.number,
+                                      controller: TextEditingController(
+                                        text: currentMinValue
+                                            .toInt()
+                                            .toString(),
+                                      ),
                                       decoration: InputDecoration(
-                                        hintText: 'От',
+                                        hintText:
+                                            appLocalizations?.translate(
+                                              'from',
+                                            ) ??
+                                            'От',
                                         hintStyle: const TextStyle(
                                           color: Color(0xFF9E9E9E),
                                           fontSize: 14,
@@ -820,9 +965,9 @@ bool _hasActiveSubscription() {
                                         final doubleValue =
                                             double.tryParse(value) ?? 0;
                                         if (doubleValue <= currentMaxValue) {
-                                          setState(() {
-                                            currentMinValue = doubleValue;
-                                          });
+                                          setState(
+                                            () => currentMinValue = doubleValue,
+                                          );
                                         }
                                       },
                                     ),
@@ -845,8 +990,15 @@ bool _hasActiveSubscription() {
                                     ),
                                     child: TextField(
                                       keyboardType: TextInputType.number,
+                                      controller: TextEditingController(
+                                        text: currentMaxValue
+                                            .toInt()
+                                            .toString(),
+                                      ),
                                       decoration: InputDecoration(
-                                        hintText: 'До',
+                                        hintText:
+                                            appLocalizations?.translate('to') ??
+                                            'До',
                                         hintStyle: const TextStyle(
                                           color: Color(0xFF9E9E9E),
                                           fontSize: 14,
@@ -865,18 +1017,18 @@ bool _hasActiveSubscription() {
                                         final doubleValue =
                                             double.tryParse(value) ?? 100000;
                                         if (doubleValue >= currentMinValue) {
-                                          setState(() {
-                                            currentMaxValue = doubleValue;
-                                          });
+                                          setState(
+                                            () => currentMaxValue = doubleValue,
+                                          );
                                         }
                                       },
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const Text(
-                                  'тг',
-                                  style: TextStyle(
+                                Text(
+                                  appLocalizations?.translate('tenge') ?? 'тг',
+                                  style: const TextStyle(
                                     color: Color(0xFF5F6368),
                                     fontSize: 14,
                                   ),
@@ -884,20 +1036,18 @@ bool _hasActiveSubscription() {
                               ],
                             ),
                             const SizedBox(height: 16),
-
-                            // Цифровые значения
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  '${currentMinValue.toInt()} тг',
+                                  '${currentMinValue.toInt()} ${appLocalizations?.translate('tenge') ?? 'тг'}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Color(0xFF5F6368),
                                   ),
                                 ),
                                 Text(
-                                  '${currentMaxValue.toInt()} тг',
+                                  '${currentMaxValue.toInt()} ${appLocalizations?.translate('tenge') ?? 'тг'}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Color(0xFF5F6368),
@@ -906,8 +1056,6 @@ bool _hasActiveSubscription() {
                               ],
                             ),
                             const SizedBox(height: 4),
-
-                            // Слайдер
                             RangeSlider(
                               values: RangeValues(
                                 currentMinValue,
@@ -928,8 +1076,6 @@ bool _hasActiveSubscription() {
                           ],
                         ),
                       ),
-
-                      // Кнопки
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: Row(
@@ -955,9 +1101,9 @@ bool _hasActiveSubscription() {
                                     vertical: 10,
                                   ),
                                 ),
-                                child: const Text(
-                                  'Сбросить',
-                                  style: TextStyle(fontSize: 14),
+                                child: Text(
+                                  appLocalizations?.translate('reset') ??
+                                      'Сбросить',
                                 ),
                               ),
                             ),
@@ -965,12 +1111,24 @@ bool _hasActiveSubscription() {
                             Expanded(
                               child: ElevatedButton(
                                 onPressed: () {
+                                  final appLocalizations = AppLocalizations.of(
+                                    context,
+                                  );
                                   setState(() {
-                                    _selectedPrice =
-                                        currentMinValue == minValue &&
-                                            currentMaxValue == maxValue
-                                        ? 'Любая стоимость'
-                                        : '${currentMinValue.toInt()} - ${currentMaxValue.toInt()} тг';
+                                    if (currentMinValue == minValue &&
+                                        currentMaxValue == maxValue) {
+                                      _selectedPriceRaw = 'any_price';
+                                      _selectedPrice =
+                                          appLocalizations?.translate(
+                                            'any_price',
+                                          ) ??
+                                          'Любая стоимость';
+                                    } else {
+                                      final priceString =
+                                          '${currentMinValue.toInt()} - ${currentMaxValue.toInt()} тг';
+                                      _selectedPriceRaw = priceString;
+                                      _selectedPrice = priceString;
+                                    }
                                   });
                                   _applyFilters();
                                   _removePriceOverlay();
@@ -986,9 +1144,9 @@ bool _hasActiveSubscription() {
                                   ),
                                   elevation: 0,
                                 ),
-                                child: const Text(
-                                  'Применить',
-                                  style: TextStyle(fontSize: 14),
+                                child: Text(
+                                  appLocalizations?.translate('apply') ??
+                                      'Применить',
                                 ),
                               ),
                             ),
@@ -1004,7 +1162,6 @@ bool _hasActiveSubscription() {
         ),
       ),
     );
-
     Overlay.of(context).insert(_priceOverlayEntry!);
   }
 
@@ -1013,298 +1170,8 @@ bool _hasActiveSubscription() {
     _priceOverlayEntry = null;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Color(0xFFFAFAFA),
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFAFAFA),
-        resizeToAvoidBottomInset:
-            false, // Предотвращает сжатие при открытии клавиатуры
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: const Color(0xFFFAFAFA),
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new,
-              color: Color(0xFF41454A),
-              size: 20,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Работа',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF41454A),
-              fontFamily: 'Plus Jakarta Sans',
-            ),
-          ),
-          actions: [
-            IconButton(
-              onPressed: _fetchOrders,
-              icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
-            ),
-          ],
-        ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Фильтры (селекты и датапикер)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Colors.white,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    // Селект "Категория"
-                    CompositedTransformTarget(
-                      link: _categoryLayerLink,
-                      child: GestureDetector(
-                        key: _categoryKey,
-                        onTap: _toggleCategoryOverlay,
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 140),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _categoryOverlayEntry != null
-                                  ? const Color(0xFF0F7EDE)
-                                  : const Color(0xFFCBCDCE),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.category_outlined,
-                                size: 18,
-                                color: Color(0xFF5F6368),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _selectedCategory!,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: _selectedCategory != 'Все категории'
-                                      ? const Color(0xFF41454A)
-                                      : const Color(0xFF9E9E9E),
-                                  fontFamily: 'Plus Jakarta Sans',
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                _categoryOverlayEntry != null
-                                    ? Icons.arrow_drop_up
-                                    : Icons.arrow_drop_down,
-                                size: 20,
-                                color: const Color(0xFF5F6368),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    // Селект "Стоимость"
-                    CompositedTransformTarget(
-                      link: _priceLayerLink,
-                      child: GestureDetector(
-                        key: _priceKey,
-                        onTap: _togglePriceOverlay,
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 140),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _priceOverlayEntry != null
-                                  ? const Color(0xFF0F7EDE)
-                                  : const Color(0xFFCBCDCE),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.attach_money_outlined,
-                                size: 18,
-                                color: Color(0xFF5F6368),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _selectedPrice!,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: _selectedPrice != 'Любая стоимость'
-                                      ? const Color(0xFF41454A)
-                                      : const Color(0xFF9E9E9E),
-                                  fontFamily: 'Plus Jakarta Sans',
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                _priceOverlayEntry != null
-                                    ? Icons.arrow_drop_up
-                                    : Icons.arrow_drop_down,
-                                size: 20,
-                                color: const Color(0xFF5F6368),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    // Датапикер
-                    GestureDetector(
-                      onTap: () => _selectDate(context),
-                      child: Container(
-                        constraints: const BoxConstraints(minWidth: 140),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFCBCDCE),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.calendar_today_outlined,
-                              size: 18,
-                              color: Color(0xFF5F6368),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _selectedDate != null
-                                  ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
-                                  : 'Дата',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: _selectedDate != null
-                                    ? const Color(0xFF41454A)
-                                    : const Color(0xFF9E9E9E),
-                                fontFamily: 'Plus Jakarta Sans',
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.arrow_drop_down,
-                              size: 20,
-                              color: Color(0xFF5F6368),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    // Кнопка сброса фильтров
-                    if (_selectedCategory != 'Все категории' ||
-                        _selectedPrice != 'Любая стоимость' ||
-                        _selectedDate != null)
-                      GestureDetector(
-                        onTap: _resetFilters,
-                        child: Container(
-                          height: 39,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFFCBCDCE),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.clear_all,
-                                size: 18,
-                                color: Color(0xFF5F6368),
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                'Сбросить',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF41454A),
-                                  fontFamily: 'Plus Jakarta Sans',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Контент (загрузка/ошибка/список заказов)
-            Expanded(
-              child: _isLoading
-                  ? _buildLoadingIndicator()
-                  : _errorMessage.isNotEmpty
-                  ? _buildErrorWidget()
-                  : _filteredOrders.isEmpty
-                  ? _buildEmptyState()
-                  : _buildOrdersList(),
-            ),
-          ],
-        ),
-
-        // Bottom Navigation Bar с SafeArea
-        bottomNavigationBar: SafeArea(
-          top: false,
-          minimum: const EdgeInsets.only(bottom: 0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFFAFAFA),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 12,
-                  offset: const Offset(0, -4),
-                  spreadRadius: -2,
-                ),
-              ],
-            ),
-            child: CustomBottomNavBar(
-              activeItem: NavItem.work,
-              accountType: AccountType.master,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Функция для выбора даты
   Future<void> _selectDate(BuildContext context) async {
+    final appLocalizations = AppLocalizations.of(context);
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
@@ -1330,25 +1197,393 @@ bool _hasActiveSubscription() {
     );
 
     if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-      // Загружаем заказы с фильтрацией по дате
+      setState(() => _selectedDate = picked);
       _fetchOrders();
     }
   }
 
-  // Виджет загрузки
-  Widget _buildLoadingIndicator() {
-    return const Center(
+  @override
+  Widget build(BuildContext context) {
+    final appLocalizations = AppLocalizations.of(context);
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateFilterDisplayValues();
+    });
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFAFAFA),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new,
+              color: Color(0xFF41454A),
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            appLocalizations?.translate('work') ?? 'Работа',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF41454A),
+              fontFamily: 'Plus Jakarta Sans',
+            ),
+          ),
+          actions: [
+            _buildLanguageButton(context, languageProvider, appLocalizations),
+            IconButton(
+              onPressed: _fetchOrders,
+              icon: const Icon(Icons.refresh, color: Color(0xFF41454A)),
+            ),
+          ],
+        ),
+        body: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildFiltersRow(appLocalizations),
+              const SizedBox(height: 8),
+              Expanded(
+                child: _isLoading
+                    ? _buildLoadingIndicator(appLocalizations)
+                    : _errorMessage.isNotEmpty
+                    ? _buildErrorWidget(appLocalizations)
+                    : _filteredOrders.isEmpty
+                    ? _buildEmptyState(appLocalizations)
+                    : _buildOrdersList(appLocalizations),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFAFA),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  spreadRadius: -2,
+                ),
+              ],
+            ),
+            child: CustomBottomNavBar(
+              activeItem: NavItem.work,
+              accountType: AccountType.master,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageButton(
+    BuildContext context,
+    LanguageProvider languageProvider,
+    AppLocalizations? appLocalizations,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLanguageOption(
+            'RU',
+            const Locale('ru'),
+            languageProvider.locale.languageCode == 'ru',
+            languageProvider,
+            context,
+          ),
+          _buildLanguageOption(
+            'KZ',
+            const Locale('kk'),
+            languageProvider.locale.languageCode == 'kk',
+            languageProvider,
+            context,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(
+    String code,
+    Locale locale,
+    bool isActive,
+    LanguageProvider provider,
+    BuildContext context,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        provider.setLanguage(locale);
+        _updateFilterDisplayValues();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              locale.languageCode == 'ru'
+                  ? 'Язык изменен на русский'
+                  : 'Тіл қазақшаға өзгертілді',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(30),
+        ),
+        child: Text(
+          code,
+          style: TextStyle(
+            color: isActive ? Colors.blue.shade700 : Colors.grey.shade600,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFiltersRow(AppLocalizations? appLocalizations) {
+    final allCategories =
+        appLocalizations?.translate('all_categories') ?? 'Все категории';
+    final anyPrice =
+        appLocalizations?.translate('any_price') ?? 'Любая стоимость';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Colors.white,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            CompositedTransformTarget(
+              link: _categoryLayerLink,
+              child: GestureDetector(
+                key: _categoryKey,
+                onTap: _toggleCategoryOverlay,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 140),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _categoryOverlayEntry != null
+                          ? const Color(0xFF0F7EDE)
+                          : const Color(0xFFCBCDCE),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.category_outlined,
+                        size: 18,
+                        color: Color(0xFF5F6368),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _selectedCategory ?? allCategories,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _selectedCategoryRaw != 'all_categories'
+                              ? const Color(0xFF41454A)
+                              : const Color(0xFF9E9E9E),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        _categoryOverlayEntry != null
+                            ? Icons.arrow_drop_up
+                            : Icons.arrow_drop_down,
+                        size: 20,
+                        color: const Color(0xFF5F6368),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            CompositedTransformTarget(
+              link: _priceLayerLink,
+              child: GestureDetector(
+                key: _priceKey,
+                onTap: _togglePriceOverlay,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 140),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _priceOverlayEntry != null
+                          ? const Color(0xFF0F7EDE)
+                          : const Color(0xFFCBCDCE),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.attach_money_outlined,
+                        size: 18,
+                        color: Color(0xFF5F6368),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _selectedPrice ?? anyPrice,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _selectedPriceRaw != 'any_price'
+                              ? const Color(0xFF41454A)
+                              : const Color(0xFF9E9E9E),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        _priceOverlayEntry != null
+                            ? Icons.arrow_drop_up
+                            : Icons.arrow_drop_down,
+                        size: 20,
+                        color: const Color(0xFF5F6368),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () => _selectDate(context),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 140),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFCBCDCE),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 18,
+                      color: Color(0xFF5F6368),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _selectedDate != null
+                          ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
+                          : appLocalizations?.translate('date') ?? 'Дата',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: _selectedDate != null
+                            ? const Color(0xFF41454A)
+                            : const Color(0xFF9E9E9E),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 20,
+                      color: Color(0xFF5F6368),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_selectedCategoryRaw != 'all_categories' ||
+                _selectedPriceRaw != 'any_price' ||
+                _selectedDate != null)
+              const SizedBox(width: 12),
+            if (_selectedCategoryRaw != 'all_categories' ||
+                _selectedPriceRaw != 'any_price' ||
+                _selectedDate != null)
+              GestureDetector(
+                onTap: _resetFilters,
+                child: Container(
+                  height: 39,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFCBCDCE),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.clear_all,
+                        size: 18,
+                        color: Color(0xFF5F6368),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        appLocalizations?.translate('reset') ?? 'Сбросить',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator(AppLocalizations? appLocalizations) {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Color(0xFF0F7EDE)),
-          SizedBox(height: 16),
+          const CircularProgressIndicator(color: Color(0xFF0F7EDE)),
+          const SizedBox(height: 16),
           Text(
-            'Загрузка заказов...',
-            style: TextStyle(
+            appLocalizations?.translate('loading_orders') ??
+                'Загрузка заказов...',
+            style: const TextStyle(
               color: Color(0xFF5F6368),
               fontSize: 16,
               fontFamily: 'Plus Jakarta Sans',
@@ -1359,8 +1594,7 @@ bool _hasActiveSubscription() {
     );
   }
 
-  // Виджет ошибки
-  Widget _buildErrorWidget() {
+  Widget _buildErrorWidget(AppLocalizations? appLocalizations) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1405,7 +1639,7 @@ bool _hasActiveSubscription() {
                 ),
                 elevation: 0,
               ),
-              child: const Text('Повторить'),
+              child: Text(appLocalizations?.translate('retry') ?? 'Повторить'),
             ),
           ],
         ),
@@ -1413,8 +1647,7 @@ bool _hasActiveSubscription() {
     );
   }
 
-  // Виджет пустого состояния
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(AppLocalizations? appLocalizations) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1435,9 +1668,10 @@ bool _hasActiveSubscription() {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Заказы не найдены',
-              style: TextStyle(
+            Text(
+              appLocalizations?.translate('no_orders_found') ??
+                  'Заказы не найдены',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF41454A),
@@ -1445,18 +1679,22 @@ bool _hasActiveSubscription() {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Измените параметры фильтра или проверьте позже',
+            Text(
+              appLocalizations?.translate('change_filters_or_check_later') ??
+                  'Измените параметры фильтра или проверьте позже',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF5F6368),
                 fontFamily: 'Plus Jakarta Sans',
               ),
             ),
-            const SizedBox(height: 24),
-            if (_selectedCategory != 'Все категории' ||
-                _selectedPrice != 'Любая стоимость' ||
+            if (_selectedCategoryRaw != 'all_categories' ||
+                _selectedPriceRaw != 'any_price' ||
+                _selectedDate != null)
+              const SizedBox(height: 24),
+            if (_selectedCategoryRaw != 'all_categories' ||
+                _selectedPriceRaw != 'any_price' ||
                 _selectedDate != null)
               ElevatedButton(
                 onPressed: _resetFilters,
@@ -1472,7 +1710,10 @@ bool _hasActiveSubscription() {
                   ),
                   elevation: 0,
                 ),
-                child: const Text('Сбросить фильтры'),
+                child: Text(
+                  appLocalizations?.translate('reset_filters') ??
+                      'Сбросить фильтры',
+                ),
               ),
           ],
         ),
@@ -1480,25 +1721,24 @@ bool _hasActiveSubscription() {
     );
   }
 
-  // Список заказов
-  Widget _buildOrdersList() {
+  Widget _buildOrdersList(AppLocalizations? appLocalizations) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _filteredOrders.length,
       itemBuilder: (context, index) {
         final order = _filteredOrders[index];
         return GestureDetector(
-          onTap: () =>
-              _navigateToOrderDetail(order), // ДОБАВЛЕНО: обработчик клика
-          child: _buildOrderItem(order),
+          onTap: () => _navigateToOrderDetail(order),
+          child: _buildOrderItem(order, appLocalizations),
         );
       },
     );
   }
 
-  // Виджет для элемента списка заказов
-  Widget _buildOrderItem(Map<String, dynamic> order) {
-    // Форматирование даты
+  Widget _buildOrderItem(
+    Map<String, dynamic> order,
+    AppLocalizations? appLocalizations,
+  ) {
     String formatDate(String dateString) {
       try {
         final date = DateTime.parse(dateString);
@@ -1508,7 +1748,6 @@ bool _hasActiveSubscription() {
       }
     }
 
-    // Форматирование цены
     String formatPrice(String price) {
       try {
         final number = double.parse(price);
@@ -1518,13 +1757,12 @@ bool _hasActiveSubscription() {
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (match) => '${match[1]} ',
         );
-        return '$integerPart тг';
+        return '$integerPart ${appLocalizations?.translate('tenge') ?? 'тг'}';
       } catch (e) {
-        return '$price тг';
+        return '$price ${appLocalizations?.translate('tenge') ?? 'тг'}';
       }
     }
 
-    // Получение первого изображения
     String? getFirstImage() {
       final images = order['images'] as List<dynamic>?;
       if (images != null && images.isNotEmpty) {
@@ -1534,270 +1772,272 @@ bool _hasActiveSubscription() {
       return null;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Изображение
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: const Color(0xFFF8FBFF),
-                  ),
-                  child: getFirstImage() != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            'http://gj-back.checkedout.kz/storage/${getFirstImage()}',
-                            fit: BoxFit.cover,
-                            width: 100,
-                            height: 100,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: const Color(0xFFF8FBFF),
-                                child: const Icon(
-                                  Icons.image_not_supported_outlined,
-                                  color: Color(0xFFCBCDCE),
-                                  size: 40,
-                                ),
-                              );
-                            },
+    return GestureDetector(
+      onTap: () => _navigateToOrderDetail(order),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: const Color(0xFFF8FBFF),
+                    ),
+                    child: getFirstImage() != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              'http://gj-back.checkedout.kz/storage/${getFirstImage()}',
+                              fit: BoxFit.cover,
+                              width: 100,
+                              height: 100,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: const Color(0xFFF8FBFF),
+                                  child: const Icon(
+                                    Icons.image_not_supported_outlined,
+                                    color: Color(0xFFCBCDCE),
+                                    size: 40,
+                                  ),
+                                );
+                              },
+                            ),
+                          )
+                        : const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Color(0xFFCBCDCE),
+                            size: 40,
                           ),
-                        )
-                      : const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Color(0xFFCBCDCE),
-                          size: 40,
-                        ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Текстовая информация
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Заголовок
-                      Text(
-                        order['title']?.toString() ?? 'Без названия',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      // Категория
-                      if (order['category'] != null &&
-                          order['category']['name'] != null)
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          order['category']['name'],
+                          order['title']?.toString() ??
+                              appLocalizations?.translate('untitled') ??
+                              'Без названия',
                           style: const TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF5F6368),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        if (order['category'] != null &&
+                            order['category']['name'] != null)
+                          Text(
+                            order['category']['name'],
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF5F6368),
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          formatPrice(order['price']?.toString() ?? '0'),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F7EDE),
                             fontFamily: 'Plus Jakarta Sans',
                           ),
                         ),
-
-                      const SizedBox(height: 8),
-
-                      // Цена
-                      Text(
-                        formatPrice(order['price']?.toString() ?? '0'),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F7EDE),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Город
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          if (order['city'] != null &&
-                              order['city']['name'] != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FBFF),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(0xFFE3F2FD),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.location_on_outlined,
-                                    size: 12,
-                                    color: Color(0xFF0F7EDE),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    order['city']['name'],
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF0F7EDE),
-                                      fontFamily: 'Plus Jakarta Sans',
-                                    ),
-                                  ),
-                                ],
+                        const SizedBox(height: 8),
+                        if (order['city'] != null &&
+                            order['city']['name'] != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FBFF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFFE3F2FD),
+                                width: 1,
                               ),
                             ),
-                        ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 12,
+                                  color: Color(0xFF0F7EDE),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  order['city']['name'],
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF0F7EDE),
+                                    fontFamily: 'Plus Jakarta Sans',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FBFF),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+                border: Border.all(color: const Color(0xFFE3F2FD), width: 1),
+              ),
+              child: Row(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 16,
+                        color: Color(0xFF5F6368),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        formatDate(order['createdAt']?.toString() ?? ''),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF5F6368),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Нижняя часть с кнопкой и датой
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FBFF),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
-              ),
-              border: Border.all(color: const Color(0xFFE3F2FD), width: 1),
-            ),
-            child: Row(
-              children: [
-                // Дата
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_today_outlined,
-                      size: 16,
-                      color: Color(0xFF5F6368),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      formatDate(order['createdAt']?.toString() ?? ''),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                  ],
-                ),
-
-                const Spacer(),
-
-                // Кнопка "Показать телефон" или сообщение об отсутствии подписки
-                if (order['telephone'] != null &&
-                    order['telephone'].toString().isNotEmpty)
-                  OutlinedButton(
-                    onPressed: () {
-                      _showPhoneNumber(order['telephone'].toString());
-                    },
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF0F7EDE),
-                      side: const BorderSide(
-                        color: Color(0xFF0F7EDE),
-                        width: 1.5,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.phone_outlined, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          'Показать телефон',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
+                  const Spacer(),
+                  if (order['telephone'] != null &&
+                      order['telephone'].toString().isNotEmpty)
+                    // Кнопка показа телефона
+                    OutlinedButton(
+                      onPressed: () {
+                        // Проверяем подписку при нажатии на кнопку "Показать телефон"
+                        if (_hasActiveSubscription()) {
+                          _showPhoneNumber(order['telephone'].toString());
+                        } else {
+                          // Если нет подписки - показываем QR код Kaspi
+                          print('❌ Нет активной подписки, открываем QR код');
+                          _launchUrl(
+                            'https://qr.kaspi.kz/19134627698424934147714893150004931409130',
+                          );
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0F7EDE),
+                        side: const BorderSide(
+                          color: Color(0xFF0F7EDE),
+                          width: 1.5,
                         ),
-                      ],
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFFFECACA),
-                        width: 1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                       ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 16,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            appLocalizations?.translate('show_phone') ??
+                                'Показать телефон',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    // Если нет телефона - показываем кнопку "Нет подписки"
+                    OutlinedButton(
+                      onPressed: () {
+                        // При нажатии на кнопку "Нет подписки" показываем QR код
+                        print('❌ Нет активной подписки, открываем QR код');
+                        _launchUrl(
+                          'https://qr.kaspi.kz/19134627698424934147714893150004931409130',
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(
                           color: Color(0xFFDC2626),
+                          width: 1.5,
                         ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Нет подписки',
-                          style: TextStyle(
-                            fontSize: 13,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.info_outline,
+                            size: 16,
                             color: Color(0xFFDC2626),
-                            fontFamily: 'Plus Jakarta Sans',
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Text(
+                            appLocalizations?.translate('no_subscription') ??
+                                'Нет подписки',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFFDC2626),
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:goodjob/screens/account_page.dart';
 import 'package:goodjob/screens/edit_profile_page.dart';
 import 'package:goodjob/screens/home_page.dart';
@@ -8,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'role_provider.dart';
 import 'services/api_service.dart';
 import 'services/auth/auth_service.dart';
+import 'providers/language_provider.dart';
+import 'localization/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,35 +43,53 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => RoleProvider())],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Flutter Demo',
-        theme: ThemeData(
-          fontFamily: 'Plus Jakarta Sans',
-          scaffoldBackgroundColor: const Color(0xFFFAFAFA),
-          primarySwatch: Colors.blue,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFFFAFAFA),
-            elevation: 0,
-            iconTheme: IconThemeData(color: Colors.black),
-          ),
-        ),
-        initialRoute: initialRoute,
-        routes: {
-          '/': (context) => const AuthChecker(),
-          '/registration': (context) => const MyHomePage(),
-          '/account-master': (context) =>
-              const EditProfilePage(initialMode: ProfileMode.master),
-          '/account-client': (context) =>
-              const AccountPage(accountType: AccountType.client),
+      providers: [
+        ChangeNotifierProvider(create: (_) => RoleProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+      ],
+      child: Consumer<LanguageProvider>(
+        builder: (context, languageProvider, _) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'GoodJob',
+            locale: languageProvider.locale,
+            supportedLocales: const [
+              Locale('ru', ''),
+              Locale('kk', ''),
+            ],
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: ThemeData(
+              fontFamily: 'Plus Jakarta Sans',
+              scaffoldBackgroundColor: const Color(0xFFFAFAFA),
+              primarySwatch: Colors.blue,
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFFFAFAFA),
+                elevation: 0,
+                iconTheme: IconThemeData(color: Colors.black),
+              ),
+            ),
+            initialRoute: initialRoute,
+            routes: {
+              '/': (context) => const AuthChecker(),
+              '/registration': (context) => const MyHomePage(),
+              '/account-master': (context) =>
+                  const EditProfilePage(initialMode: ProfileMode.master),
+              '/account-client': (context) =>
+                  const AccountPage(accountType: AccountType.client),
+            },
+          );
         },
       ),
     );
   }
 }
 
-// lib/main.dart (обновленный AuthChecker)
+// Обновленный AuthChecker с поддержкой локализации
 class AuthChecker extends StatefulWidget {
   const AuthChecker({super.key});
 
@@ -133,6 +154,8 @@ class _AuthCheckerState extends State<AuthChecker> {
 
   @override
   Widget build(BuildContext context) {
+    final appLocalizations = AppLocalizations.of(context)!;
+    
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: Center(
@@ -142,7 +165,7 @@ class _AuthCheckerState extends State<AuthChecker> {
             const CircularProgressIndicator(),
             const SizedBox(height: 20),
             Text(
-              'Проверка авторизации...',
+              appLocalizations.translate('checking_auth'),
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],
