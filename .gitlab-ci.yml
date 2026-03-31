@@ -1,16 +1,17 @@
 stages:
   - build
 
-ios_bundle:
+build_ios:
   stage: build
   tags:
-    - saas-macos-medium-m1 # Раннер с маком
+    - macos  # Критически важно: этот тег указывает, что нужен сервер с macOS
   script:
+    - flutter doctor
     - flutter pub get
+    # Сборка без подписи (если нужно просто проверить, что код компилируется)
     - flutter build ios --release --no-codesign
-    - cd build/ios/iphoneos
-    - zip -r Runner.app.zip Runner.app
+    # Если нужны архивы для стора, обычно используют fastlane
   artifacts:
     paths:
-      - build/ios/iphoneos/Runner.app.zip
-    expire_in: 2 days
+      - build/ios/iphoneos/Runner.app
+    expire_in: 1 week
