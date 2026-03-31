@@ -1,0 +1,32 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [ "my-feature" ] # или любая ветка, которую пушишь
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS
+        # Флаг --no-codesign позволяет собрать билд без платных сертификатов Apple
+        run: flutter build ios --release --no-codesign
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-bundle
+          path: build/ios/iphoneos/Runner.app
