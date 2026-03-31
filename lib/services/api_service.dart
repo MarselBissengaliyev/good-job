@@ -284,6 +284,10 @@ class ApiService {
 
   static Future<void> revokeOrder(String orderId) =>
       _ordersApi.revokeOrder(orderId);
+    
+      static Future<void> archiveOrder(String orderId) =>
+      _ordersApi.archiveOrder(orderId);
+
 
   static Future<void> changeOrderStatus({
     required String orderId,

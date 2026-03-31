@@ -148,6 +148,21 @@ class OrdersApi {
     }
   }
 
+  Future<void> archiveOrder(String orderId) async {
+    const method = 'POST';
+    final url = '/orders/$orderId/archive';
+
+    ApiLogger.logRequest(method, url);
+
+    try {
+      final response = await _client.post(url);
+      ApiLogger.logResponse(200, response);
+    } catch (e) {
+      ApiLogger.logError(e);
+      rethrow;
+    }
+  }
+
 
   Future<void> markOrderAsViewed(String orderId) async {
     try {

@@ -181,63 +181,68 @@ class _OrderClientPageState extends State<OrderClientPage>
     }
   }
 
- Future<void> _withdrawOrder() async {
-  final appLocalizations = AppLocalizations.of(context);
-  if (_order == null) return;
+  Future<void> _withdrawOrder() async {
+    final appLocalizations = AppLocalizations.of(context);
+    if (_order == null) return;
 
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(
-        appLocalizations?.translate('withdraw_order') ?? 'Отозвать заказ',
-      ),
-      content: Text(
-        appLocalizations?.translate('withdraw_order_confirm') ??
-            'Вы уверены, что хотите отозвать этот заказ?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(appLocalizations?.translate('cancel') ?? 'Отмена'),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          appLocalizations?.translate('withdraw_order') ?? 'Отозвать заказ',
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(
-            appLocalizations?.translate('withdraw') ?? 'Отозвать',
-            style: const TextStyle(color: Colors.red),
+        content: Text(
+          appLocalizations?.translate('withdraw_order_confirm') ??
+              'Вы уверены, что хотите отозвать этот заказ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(appLocalizations?.translate('cancel') ?? 'Отмена'),
           ),
-        ),
-      ],
-    ),
-  );
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              appLocalizations?.translate('withdraw') ?? 'Отозвать',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
 
-  if (confirmed == true) {
-    try {
-      _showCustomSnackBar(
-        message: appLocalizations?.translate('withdrawing_order') ?? 'Отзыв заказа...',
-        isSuccess: true,
-      );
+    if (confirmed == true) {
+      try {
+        _showCustomSnackBar(
+          message:
+              appLocalizations?.translate('withdrawing_order') ??
+              'Отзыв заказа...',
+          isSuccess: true,
+        );
 
-      // Используем новый метод revokeOrder
-      await ApiService.revokeOrder(widget.orderId);
+        // Используем новый метод revokeOrder
+        await ApiService.revokeOrder(widget.orderId);
 
-      setState(() {
-        _order?['status'] = 'canceled';
-        _order?['is_active'] = false;
-      });
+        setState(() {
+          _order?['status'] = 'canceled';
+          _order?['is_active'] = false;
+        });
 
-      _showCustomSnackBar(
-        message: appLocalizations?.translate('order_withdrawn') ?? 'Заказ успешно отозван',
-        isSuccess: true,
-      );
-    } catch (e) {
-      _showCustomSnackBar(
-        message: '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
-        isSuccess: false,
-      );
+        _showCustomSnackBar(
+          message:
+              appLocalizations?.translate('order_withdrawn') ??
+              'Заказ успешно отозван',
+          isSuccess: true,
+        );
+      } catch (e) {
+        _showCustomSnackBar(
+          message:
+              '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
+          isSuccess: false,
+        );
+      }
     }
   }
-} 
 
   void _editOrder() {
     if (_order == null) return;
@@ -251,61 +256,71 @@ class _OrderClientPageState extends State<OrderClientPage>
     );
   }
 
-Future<void> _publishOrder() async {
-  final appLocalizations = AppLocalizations.of(context);
-  try {
-    _showCustomSnackBar(
-      message: appLocalizations?.translate('publishing_order') ?? 'Публикация заказа...',
-      isSuccess: true,
-    );
+  Future<void> _publishOrder() async {
+    final appLocalizations = AppLocalizations.of(context);
+    try {
+      _showCustomSnackBar(
+        message:
+            appLocalizations?.translate('publishing_order') ??
+            'Публикация заказа...',
+        isSuccess: true,
+      );
 
-    // Используем новый метод publishOrder
-    await ApiService.publishOrder(widget.orderId);
+      // Используем новый метод publishOrder
+      await ApiService.publishOrder(widget.orderId);
 
-    setState(() {
-      _order?['status'] = 'active';
-      _order?['is_active'] = true;
-    });
+      setState(() {
+        _order?['status'] = 'active';
+        _order?['is_active'] = true;
+      });
 
-    _showCustomSnackBar(
-      message: appLocalizations?.translate('order_published') ?? 'Заказ успешно опубликован',
-      isSuccess: true,
-    );
-  } catch (e) {
-    _showCustomSnackBar(
-      message: '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
-      isSuccess: false,
-    );
+      _showCustomSnackBar(
+        message:
+            appLocalizations?.translate('order_published') ??
+            'Заказ успешно опубликован',
+        isSuccess: true,
+      );
+    } catch (e) {
+      _showCustomSnackBar(
+        message:
+            '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
+      );
+    }
   }
-}
- Future<void> _unpublishOrder() async {
-  final appLocalizations = AppLocalizations.of(context);
-  try {
-    _showCustomSnackBar(
-      message: appLocalizations?.translate('unpublishing_order') ?? 'Отзыв публикации...',
-      isSuccess: true,
-    );
 
-    // Используем новый метод revokeOrder
-    await ApiService.revokeOrder(widget.orderId);
+  Future<void> _unpublishOrder() async {
+    final appLocalizations = AppLocalizations.of(context);
+    try {
+      _showCustomSnackBar(
+        message:
+            appLocalizations?.translate('unpublishing_order') ??
+            'Отзыв публикации...',
+        isSuccess: true,
+      );
 
-    setState(() {
-      _order?['status'] = 'canceled';
-      _order?['is_active'] = false;
-    });
+      // Используем новый метод revokeOrder
+      await ApiService.revokeOrder(widget.orderId);
 
-    _showCustomSnackBar(
-      message: appLocalizations?.translate('order_unpublished') ?? 'Публикация отозвана',
-      isSuccess: true,
-    );
-  } catch (e) {
-    _showCustomSnackBar(
-      message: '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
-      isSuccess: false,
-    );
+      setState(() {
+        _order?['status'] = 'canceled';
+        _order?['is_active'] = false;
+      });
+
+      _showCustomSnackBar(
+        message:
+            appLocalizations?.translate('order_unpublished') ??
+            'Публикация отозвана',
+        isSuccess: true,
+      );
+    } catch (e) {
+      _showCustomSnackBar(
+        message:
+            '${appLocalizations?.translate('error') ?? 'Ошибка'}: ${e.toString().replaceAll('Exception: ', '')}',
+        isSuccess: false,
+      );
+    }
   }
-}
-
 
   Future<void> _archiveOrder() async {
     final appLocalizations = AppLocalizations.of(context);
@@ -343,10 +358,7 @@ Future<void> _publishOrder() async {
           isSuccess: true,
         );
 
-        await ApiService.changeOrderStatus(
-          orderId: widget.orderId,
-          status: 'archived',
-        );
+        await ApiService.archiveOrder(widget.orderId);
 
         setState(() {
           _order?['status'] = 'archived';

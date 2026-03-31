@@ -1,0 +1,16 @@
+stages:
+  - build
+
+ios_bundle:
+  stage: build
+  tags:
+    - saas-macos-medium-m1 # Раннер с маком
+  script:
+    - flutter pub get
+    - flutter build ios --release --no-codesign
+    - cd build/ios/iphoneos
+    - zip -r Runner.app.zip Runner.app
+  artifacts:
+    paths:
+      - build/ios/iphoneos/Runner.app.zip
+    expire_in: 2 days

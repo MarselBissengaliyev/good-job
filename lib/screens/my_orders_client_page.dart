@@ -285,7 +285,7 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage>
         message: appLocalizations?.translate('archiving_order') ?? 'Архивация заказа...', 
         isSuccess: true
       );
-      await ApiService.changeOrderStatus(orderId: orderId, status: 'archived');
+      await ApiService.archiveOrder(orderId);
       HapticFeedback.heavyImpact();
       _showCustomSnackBar(
         message: appLocalizations?.translate('order_archived') ?? 'Заказ архивирован', 

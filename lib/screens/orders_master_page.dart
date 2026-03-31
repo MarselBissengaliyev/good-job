@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:goodjob/custom_bottom_navbar.dart';
 import 'package:goodjob/screens/account_page.dart';
 import 'package:goodjob/screens/order_client_page.dart';
+import 'package:goodjob/screens/subscription_success_page.dart';
 import 'package:goodjob/services/api_service.dart';
 import 'package:goodjob/services/common/profile_api.dart';
 import 'package:provider/provider.dart';
@@ -1991,9 +1992,11 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                     OutlinedButton(
                       onPressed: () {
                         // При нажатии на кнопку "Нет подписки" показываем QR код
-                        print('❌ Нет активной подписки, открываем QR код');
-                        _launchUrl(
-                          'https://qr.kaspi.kz/19134627698424934147714893150004931409130',
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SubscriptionSuccessPage(),
+                          ),
                         );
                       },
                       style: OutlinedButton.styleFrom(
