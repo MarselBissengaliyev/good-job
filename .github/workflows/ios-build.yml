@@ -1,6 +1,6 @@
 name: Build iOS
 
-on:
+on: 
   push:
     branches: [ "my-feature" ] # или любая ветка, которую пушишь
   workflow_dispatch:

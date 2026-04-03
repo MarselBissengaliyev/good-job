@@ -29,7 +29,6 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
   Timer? _timer;
   late int _remainingSeconds;
   bool _isLoading = false;
-  String? _expectedCode;
   Map<String, dynamic>? _serverPayload;
   
   late AnimationController _animationController;
@@ -41,7 +40,6 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
     super.initState();
     _remainingSeconds = widget.codeTtl;
     _startTimer();
-    _fetchDebugInfo();
     
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -59,27 +57,6 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
       curve: Curves.easeOutCubic,
     ));
     _animationController.forward();
-  }
-
-  Future<void> _fetchDebugInfo() async {
-    try {
-      final data = await ApiService.getDebugSmsCode(widget.phoneNumber);
-      if (data != null && mounted) {
-        setState(() {
-          _expectedCode = data;
-        });
-        
-        // Автоматическое заполнение для тестирования
-        if (_expectedCode != null && _expectedCode!.length == 4) {
-          for (int i = 0; i < 4; i++) {
-            _controllers[i].text = _expectedCode![i];
-          }
-          _focusNodes[3].requestFocus();
-        }
-      }
-    } catch (e) {
-      print('[DEBUG] Ошибка получения тестового кода: $e');
-    }
   }
 
   void _startTimer() {
@@ -362,9 +339,6 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
                           const SizedBox(height: 24),
                           
                           _buildTimerOrResend(appLocalizations),
-                          
-                          // Тестовый режим (только для разработки)
-                          if (_expectedCode != null) _buildTestModeWidget(appLocalizations),
                         ],
                       ),
                     ),
@@ -516,77 +490,6 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
           color: Colors.blue.shade700,
           fontFamily: 'Plus Jakarta Sans',
         ),
-      ),
-    );
-  }
-
-  Widget _buildTestModeWidget(AppLocalizations appLocalizations) {
-    return Container(
-      margin: const EdgeInsets.only(top: 32),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.blue.shade50,
-            Colors.blue.shade100,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue.shade200, width: 1),
-      ),
-      child: Column(
-        children: [
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.code, color: Colors.blue, size: 20),
-              SizedBox(width: 8),
-              Text(
-                'TEST MODE',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.1),
-                  blurRadius: 4,
-                ),
-              ],
-            ),
-            child: Text(
-              _expectedCode ?? appLocalizations.translate('loading'),
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade700,
-                fontFamily: 'Plus Jakarta Sans',
-                letterSpacing: 4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            appLocalizations.translate('test_code_hint'),
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
       ),
     );
   }
