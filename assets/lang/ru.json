@@ -305,5 +305,6 @@
     "verification_time": "⏱️ Обычно занимает 5-10 минут",
     "redirect_message": "Переход на страницу оплаты Kaspi",
     "redirect_countdown": "Автоматический переход через",
-    "pay_now_button": "💳 Перейти к оплате сейчас"
+    "pay_now_button": "💳 Перейти к оплате сейчас",
+  "all_cities": "Все города"
 }

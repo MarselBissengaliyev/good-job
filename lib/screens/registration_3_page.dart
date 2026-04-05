@@ -297,6 +297,13 @@ class _Registration3PageState extends State<Registration3Page> with SingleTicker
             builder: (context) => Registration4Page(
               phoneNumber: phoneNumber,
               codeTtl: ttl,
+              isRegistering: true,
+              registeringData: {
+                'firstname': firstname,
+                'lastname': lastname,
+                'city_id': selectedCityId!,
+                'active_mode': roleProvider.selectedRole == UserRole.master ? 'master' : 'client',
+              }
             ),
           ),
         );

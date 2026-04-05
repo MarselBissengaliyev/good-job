@@ -11,11 +11,15 @@ import '../services/auth/auth_service.dart';
 class Registration4Page extends StatefulWidget {
   final String phoneNumber;
   final int codeTtl;
+  final bool isRegistering;
+  final Map<String, dynamic>? registeringData;
 
   const Registration4Page({
     super.key,
     required this.phoneNumber,
     this.codeTtl = 60,
+    this.isRegistering = false,
+    this.registeringData,
   });
 
   @override
@@ -163,7 +167,16 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
     setState(() => _isLoading = true);
 
     try {
-      await ApiService.login(telephone: widget.phoneNumber);
+      if (widget.isRegistering) {
+        await ApiService.registerUser(
+          firstname: widget.registeringData?['firstname'] ?? 'temp',
+          lastname: widget.registeringData?['lastname'] ?? 'temp',
+          telephone: widget.phoneNumber,
+          cityId: widget.registeringData?['city_id'] ?? 0,
+          activeMode: widget.registeringData?['active_mode'] ?? 'client',);
+      } else {
+        await ApiService.login(telephone: widget.phoneNumber);
+      }
       setState(() {
         _remainingSeconds = widget.codeTtl;
       });

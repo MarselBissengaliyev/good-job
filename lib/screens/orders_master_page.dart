@@ -24,11 +24,12 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   List<dynamic> _orders = [];
   List<dynamic> _filteredOrders = [];
   bool _isLoading = true;
-  bool _initialized = false; // Add this flag
+  bool _initialized = false;
   String _errorMessage = '';
 
   String? _selectedCategory;
   String? _selectedPrice;
+  String? _selectedCity; // Добавлено для города
   DateTime? _selectedDate;
 
   final ProfileApi _profileApi = ProfileApi();
@@ -37,27 +38,32 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   bool _userDataLoaded = false;
   bool _hasSubscription = false;
   List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _cities = []; // Добавлено для списка городов
 
   OverlayEntry? _categoryOverlayEntry;
   OverlayEntry? _priceOverlayEntry;
+  OverlayEntry? _cityOverlayEntry; // Добавлено для города
   final LayerLink _categoryLayerLink = LayerLink();
   final LayerLink _priceLayerLink = LayerLink();
+  final LayerLink _cityLayerLink = LayerLink(); // Добавлено для города
   final GlobalKey _categoryKey = GlobalKey();
   final GlobalKey _priceKey = GlobalKey();
+  final GlobalKey _cityKey = GlobalKey(); // Добавлено для города
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
   String? _selectedCategoryRaw;
   String? _selectedPriceRaw;
+  String? _selectedCityRaw; // Добавлено для города
 
   @override
   void initState() {
     super.initState();
     _selectedCategoryRaw = 'all_categories';
     _selectedPriceRaw = 'any_price';
+    _selectedCityRaw = 'all_cities'; // Добавлено для города
 
-    // Don't call methods that use AppLocalizations here
     _initAnimation();
 
     SystemChrome.setSystemUIOverlayStyle(
@@ -68,18 +74,18 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     );
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // Initialize after dependencies are resolved
-    if (!_initialized) {
-      _initialized = true;
-      _loadUserProfile();
-      _loadCategories();
-      _fetchOrders();
-    }
+ @override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+  
+  if (!_initialized) {
+    _initialized = true;
+    _loadUserProfile();
+    _loadCategories();
+    _loadCities(); // Добавьте эту строку
+    _fetchOrders();
   }
+}
 
   void _initAnimation() {
     _animationController = AnimationController(
@@ -97,6 +103,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   void dispose() {
     _removeCategoryOverlay();
     _removePriceOverlay();
+    _removeCityOverlay(); // Добавлено для города
     _animationController.dispose();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -115,6 +122,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
         appLocalizations,
       );
       _selectedPrice = _getLocalizedPrice(_selectedPriceRaw, appLocalizations);
+      _selectedCity = _getLocalizedCity(_selectedCityRaw, appLocalizations);
     });
   }
 
@@ -142,9 +150,17 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     return rawValue;
   }
 
-  // Update methods that use AppLocalizations to check if mounted
+  String _getLocalizedCity(
+    String? rawValue,
+    AppLocalizations? appLocalizations,
+  ) {
+    if (rawValue == null || rawValue == 'all_cities') {
+      return appLocalizations?.translate('all_cities') ?? 'Все города';
+    }
+    return rawValue;
+  }
+
   Future<void> _loadUserProfile() async {
-    // Check if mounted before using context
     if (!mounted) return;
 
     final appLocalizations = AppLocalizations.of(context);
@@ -159,7 +175,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
         print('📱 Данные пользователя: $user');
         print('📋 Подписки: ${user['subscriptions']}');
 
-        // Проверяем наличие активной подписки
         bool hasActiveSub = false;
         final subscriptions = user['subscriptions'] as List?;
         if (subscriptions != null && subscriptions.isNotEmpty) {
@@ -228,7 +243,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   }
 
   Future<void> _loadCategories() async {
-    // Check if mounted before using context
     if (!mounted) return;
 
     final appLocalizations = AppLocalizations.of(context);
@@ -247,8 +261,22 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     }
   }
 
+// Добавьте этот метод в класс:
+Future<void> _loadCities() async {
+  if (!mounted) return;
+  
+  try {
+    final cities = await ApiService.getCities();
+    if (mounted) {
+      setState(() {
+        _cities = List<Map<String, dynamic>>.from(cities);
+      });
+    }
+  } catch (e) {
+    print('Ошибка загрузки городов: $e');
+  }
+}
   void _showError(String message) {
-    // Check if mounted before using context
     if (!mounted) return;
 
     final appLocalizations = AppLocalizations.of(context);
@@ -333,41 +361,52 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   }
 
   void _applyLocalFilters() {
-    if (!mounted) return;
+  if (!mounted) return;
 
-    List<dynamic> filtered = List.from(_orders);
-    final appLocalizations = AppLocalizations.of(context);
+  List<dynamic> filtered = List.from(_orders);
+  final appLocalizations = AppLocalizations.of(context);
 
-    final isAllCategories = _selectedCategoryRaw == 'all_categories';
-    final isAnyPrice = _selectedPriceRaw == 'any_price';
+  final isAllCategories = _selectedCategoryRaw == 'all_categories';
+  final isAnyPrice = _selectedPriceRaw == 'any_price';
+  final isAllCities = _selectedCityRaw == 'all_cities';
 
-    if (!isAllCategories && _selectedCategoryRaw != null) {
-      filtered = filtered.where((order) {
-        final category = order['category']?['name']?.toString() ?? '';
-        return category.toLowerCase().contains(
-          _selectedCategoryRaw!.toLowerCase(),
-        );
-      }).toList();
-    }
-
-    if (!isAnyPrice &&
-        _selectedPriceRaw != null &&
-        _selectedPriceRaw!.contains('-')) {
-      try {
-        final priceRange = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
-        final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
-        final maxPrice =
-            double.tryParse(priceRange[1].trim()) ?? double.infinity;
-        filtered = filtered.where((order) {
-          final priceStr = order['price']?.toString() ?? '0';
-          final price = double.tryParse(priceStr) ?? 0;
-          return price >= minPrice && price <= maxPrice;
-        }).toList();
-      } catch (e) {}
-    }
-
-    setState(() => _filteredOrders = filtered);
+  // Фильтр по категории
+  if (!isAllCategories && _selectedCategoryRaw != null) {
+    filtered = filtered.where((order) {
+      final category = order['category']?['name']?.toString() ?? '';
+      return category.toLowerCase().contains(
+        _selectedCategoryRaw!.toLowerCase(),
+      );
+    }).toList();
   }
+
+  // Фильтр по цене
+  if (!isAnyPrice &&
+      _selectedPriceRaw != null &&
+      _selectedPriceRaw!.contains('-')) {
+    try {
+      final priceRange = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
+      final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
+      final maxPrice =
+          double.tryParse(priceRange[1].trim()) ?? double.infinity;
+      filtered = filtered.where((order) {
+        final priceStr = order['price']?.toString() ?? '0';
+        final price = double.tryParse(priceStr) ?? 0;
+        return price >= minPrice && price <= maxPrice;
+      }).toList();
+    } catch (e) {}
+  }
+
+  // Фильтр по городу (НОВЫЙ)
+  if (!isAllCities && _selectedCityRaw != null) {
+    filtered = filtered.where((order) {
+      final city = order['city']?['name']?.toString() ?? '';
+      return city.toLowerCase() == _selectedCityRaw!.toLowerCase();
+    }).toList();
+  }
+
+  setState(() => _filteredOrders = filtered);
+}
 
   void _applyFilters() {
     if (!mounted) return;
@@ -377,6 +416,8 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
 
     final isAllCategories = _selectedCategoryRaw == 'all_categories';
     final isAnyPrice = _selectedPriceRaw == 'any_price';
+    final isAllCities =
+        _selectedCityRaw == 'all_cities' || _selectedCityRaw == null;
 
     if (!isAllCategories && _selectedCategoryRaw != null) {
       filtered = filtered.where((order) {
@@ -401,6 +442,14 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
           return price >= minPrice && price <= maxPrice;
         }).toList();
       } catch (e) {}
+    }
+
+    // Фильтр по городу
+    if (!isAllCities && _selectedCityRaw != null) {
+      filtered = filtered.where((order) {
+        final city = order['city']?['name']?.toString() ?? '';
+        return city.toLowerCase().contains(_selectedCityRaw!.toLowerCase());
+      }).toList();
     }
 
     if (_selectedDate != null) {
@@ -436,21 +485,22 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     }
   }
 
-  void _resetFilters() {
-    final appLocalizations = AppLocalizations.of(context);
-    setState(() {
-      _selectedCategoryRaw = 'all_categories';
-      _selectedPriceRaw = 'any_price';
-      _selectedCategory =
-          appLocalizations?.translate('all_categories') ?? 'Все категории';
-      _selectedPrice =
-          appLocalizations?.translate('any_price') ?? 'Любая стоимость';
-      _selectedDate = null;
-    });
-    _removeCategoryOverlay();
-    _removePriceOverlay();
-    _fetchOrders();
-  }
+void _resetFilters() {
+  final appLocalizations = AppLocalizations.of(context);
+  setState(() {
+    _selectedCategoryRaw = 'all_categories';
+    _selectedPriceRaw = 'any_price';
+    _selectedCityRaw = 'all_cities'; // Добавьте
+    _selectedCategory = appLocalizations?.translate('all_categories') ?? 'Все категории';
+    _selectedPrice = appLocalizations?.translate('any_price') ?? 'Любая стоимость';
+    _selectedCity = appLocalizations?.translate('all_cities') ?? 'Все города'; // Добавьте
+    _selectedDate = null;
+  });
+  _removeCategoryOverlay();
+  _removePriceOverlay();
+  _removeCityOverlay(); // Добавьте
+  _fetchOrders();
+}
 
   void _navigateToOrderDetail(Map<String, dynamic> order) {
     final appLocalizations = AppLocalizations.of(context);
@@ -459,7 +509,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       '🔍 Переход к заказу: _userDataLoaded=$_userDataLoaded, _hasSubscription=$_hasSubscription',
     );
 
-    // Если данные пользователя еще не загружены
     if (!_userDataLoaded) {
       print('⏳ Данные пользователя еще загружаются...');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -507,7 +556,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       '🔍 Показ телефона: _userDataLoaded=$_userDataLoaded, _hasSubscription=$_hasSubscription',
     );
 
-    // Если данные пользователя еще не загружены
     if (!_userDataLoaded) {
       print('⏳ Данные пользователя еще загружаются...');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -523,7 +571,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       return;
     }
 
-    // Проверяем наличие активной подписки
     final hasSubscription = _hasActiveSubscription();
     print('🔍 Проверка подписки при показе телефона: $hasSubscription');
 
@@ -535,7 +582,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       return;
     }
 
-    // Если подписка есть - показываем номер телефона
     print('✅ Подписка активна, показываем телефон: $phoneNumber');
     showDialog(
       context: context,
@@ -656,6 +702,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       _removeCategoryOverlay();
     } else {
       _removePriceOverlay();
+      _removeCityOverlay();
       _showCategoryOverlay();
     }
   }
@@ -830,6 +877,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       _removePriceOverlay();
     } else {
       _removeCategoryOverlay();
+      _removeCityOverlay();
       _showPriceOverlay();
     }
   }
@@ -1171,6 +1219,82 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     _priceOverlayEntry = null;
   }
 
+void _toggleCityOverlay() {
+  if (_cityOverlayEntry != null) {
+    _removeCityOverlay();
+  } else {
+    _removeCategoryOverlay();
+    _removePriceOverlay();
+    _showCityOverlay();
+  }
+}
+
+
+Widget _buildCityItem(String rawValue, String displayName) {
+  final isSelected = _selectedCityRaw == rawValue;
+
+  return GestureDetector(
+    onTap: () {
+      setState(() {
+        _selectedCityRaw = rawValue;
+        _selectedCity = displayName;
+      });
+      _applyLocalFilters();
+      _removeCityOverlay();
+    },
+    child: Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        border: isSelected
+            ? const Border(
+                left: BorderSide(color: Color(0xFF0F7EDE), width: 3),
+              )
+            : null,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected
+                    ? const Color(0xFF0F7EDE)
+                    : const Color(0xFFCBCDCE),
+                width: 1.5,
+              ),
+              color: isSelected ? const Color(0xFF0F7EDE) : Colors.white,
+            ),
+            child: isSelected
+                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              displayName,
+              style: TextStyle(
+                fontSize: 14,
+                color: isSelected
+                    ? const Color(0xFF0F7EDE)
+                    : const Color(0xFF41454A),
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  void _removeCityOverlay() {
+    _cityOverlayEntry?.remove();
+    _cityOverlayEntry = null;
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final appLocalizations = AppLocalizations.of(context);
     final DateTime? picked = await showDatePicker(
@@ -1369,207 +1493,391 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     );
   }
 
+void _showCityOverlay() {
+  final appLocalizations = AppLocalizations.of(context);
+  final renderBox = _cityKey.currentContext?.findRenderObject() as RenderBox?;
+  final size = renderBox?.size ?? Size.zero;
+  final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+  _cityOverlayEntry = OverlayEntry(
+    builder: (context) => Positioned(
+      left: offset.dx,
+      top: offset.dy + size.height + 4,
+      child: CompositedTransformFollower(
+        link: _cityLayerLink,
+        showWhenUnlinked: false,
+        offset: Offset(0, size.height + 4),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: size.width,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                  child: Row(
+                    children: [
+                      Text(
+                        appLocalizations?.translate('city') ?? 'Город',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: _removeCityOverlay,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Color(0xFF5F6368),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      _buildCityItem(
+                        'all_cities',
+                        appLocalizations?.translate('all_cities') ?? 'Все города',
+                      ),
+                      ..._cities
+                          .map(
+                            (city) => _buildCityItem(
+                              city['name'],
+                              city['name'],
+                            ),
+                          )
+                          .toList(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  Overlay.of(context).insert(_cityOverlayEntry!);
+}
+
   Widget _buildFiltersRow(AppLocalizations? appLocalizations) {
     final allCategories =
         appLocalizations?.translate('all_categories') ?? 'Все категории';
     final anyPrice =
         appLocalizations?.translate('any_price') ?? 'Любая стоимость';
+    final allCities = appLocalizations?.translate('all_cities') ?? 'Все города';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: Colors.white,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            CompositedTransformTarget(
-              link: _categoryLayerLink,
-              child: GestureDetector(
-                key: _categoryKey,
-                onTap: _toggleCategoryOverlay,
-                child: Container(
-                  constraints: const BoxConstraints(minWidth: 140),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _categoryOverlayEntry != null
-                          ? const Color(0xFF0F7EDE)
-                          : const Color(0xFFCBCDCE),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.category_outlined,
-                        size: 18,
-                        color: Color(0xFF5F6368),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _selectedCategory ?? allCategories,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _selectedCategoryRaw != 'all_categories'
-                              ? const Color(0xFF41454A)
-                              : const Color(0xFF9E9E9E),
-                          fontFamily: 'Plus Jakarta Sans',
+      child: Row(
+        children: [
+          // Горизонтальный скролл для фильтров
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  // Фильтр по категории
+                  CompositedTransformTarget(
+                    link: _categoryLayerLink,
+                    child: GestureDetector(
+                      key: _categoryKey,
+                      onTap: _toggleCategoryOverlay,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 140),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _categoryOverlayEntry != null
+                                ? const Color(0xFF0F7EDE)
+                                : const Color(0xFFCBCDCE),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.category_outlined,
+                              size: 18,
+                              color: Color(0xFF5F6368),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _selectedCategory ?? allCategories,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: _selectedCategoryRaw != 'all_categories'
+                                    ? const Color(0xFF41454A)
+                                    : const Color(0xFF9E9E9E),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              _categoryOverlayEntry != null
+                                  ? Icons.arrow_drop_up
+                                  : Icons.arrow_drop_down,
+                              size: 20,
+                              color: const Color(0xFF5F6368),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        _categoryOverlayEntry != null
-                            ? Icons.arrow_drop_up
-                            : Icons.arrow_drop_down,
-                        size: 20,
-                        color: const Color(0xFF5F6368),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            CompositedTransformTarget(
-              link: _priceLayerLink,
-              child: GestureDetector(
-                key: _priceKey,
-                onTap: _togglePriceOverlay,
-                child: Container(
-                  constraints: const BoxConstraints(minWidth: 140),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _priceOverlayEntry != null
-                          ? const Color(0xFF0F7EDE)
-                          : const Color(0xFFCBCDCE),
-                      width: 1.5,
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.attach_money_outlined,
-                        size: 18,
-                        color: Color(0xFF5F6368),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _selectedPrice ?? anyPrice,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _selectedPriceRaw != 'any_price'
-                              ? const Color(0xFF41454A)
-                              : const Color(0xFF9E9E9E),
-                          fontFamily: 'Plus Jakarta Sans',
+                  const SizedBox(width: 12),
+
+                  // Фильтр по цене
+                  CompositedTransformTarget(
+                    link: _priceLayerLink,
+                    child: GestureDetector(
+                      key: _priceKey,
+                      onTap: _togglePriceOverlay,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 140),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _priceOverlayEntry != null
+                                ? const Color(0xFF0F7EDE)
+                                : const Color(0xFFCBCDCE),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.attach_money_outlined,
+                              size: 18,
+                              color: Color(0xFF5F6368),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _selectedPrice ?? anyPrice,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: _selectedPriceRaw != 'any_price'
+                                    ? const Color(0xFF41454A)
+                                    : const Color(0xFF9E9E9E),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              _priceOverlayEntry != null
+                                  ? Icons.arrow_drop_up
+                                  : Icons.arrow_drop_down,
+                              size: 20,
+                              color: const Color(0xFF5F6368),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        _priceOverlayEntry != null
-                            ? Icons.arrow_drop_up
-                            : Icons.arrow_drop_down,
-                        size: 20,
-                        color: const Color(0xFF5F6368),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => _selectDate(context),
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 140),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFCBCDCE),
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.calendar_today_outlined,
-                      size: 18,
-                      color: Color(0xFF5F6368),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _selectedDate != null
-                          ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
-                          : appLocalizations?.translate('date') ?? 'Дата',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _selectedDate != null
-                            ? const Color(0xFF41454A)
-                            : const Color(0xFF9E9E9E),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 20,
-                      color: Color(0xFF5F6368),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_selectedCategoryRaw != 'all_categories' ||
-                _selectedPriceRaw != 'any_price' ||
-                _selectedDate != null)
-              const SizedBox(width: 12),
-            if (_selectedCategoryRaw != 'all_categories' ||
-                _selectedPriceRaw != 'any_price' ||
-                _selectedDate != null)
-              GestureDetector(
-                onTap: _resetFilters,
-                child: Container(
-                  height: 39,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFCBCDCE),
-                      width: 1.5,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.clear_all,
-                        size: 18,
-                        color: Color(0xFF5F6368),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        appLocalizations?.translate('reset') ?? 'Сбросить',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
+                  const SizedBox(width: 12),
+
+                  // ФИЛЬТР ПО ГОРОДУ (НОВЫЙ)
+                  CompositedTransformTarget(
+                    link: _cityLayerLink,
+                    child: GestureDetector(
+                      key: _cityKey,
+                      onTap: _toggleCityOverlay,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 140),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _cityOverlayEntry != null
+                                ? const Color(0xFF0F7EDE)
+                                : const Color(0xFFCBCDCE),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 18,
+                              color: Color(0xFF5F6368),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _selectedCity ?? allCities,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: _selectedCityRaw != 'all_cities'
+                                    ? const Color(0xFF41454A)
+                                    : const Color(0xFF9E9E9E),
+                                fontFamily: 'Plus Jakarta Sans',
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              _cityOverlayEntry != null
+                                  ? Icons.arrow_drop_up
+                                  : Icons.arrow_drop_down,
+                              size: 20,
+                              color: const Color(0xFF5F6368),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
+                  const SizedBox(width: 12),
+
+                  // Фильтр по дате
+                  GestureDetector(
+                    onTap: () => _selectDate(context),
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 140),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFCBCDCE),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 18,
+                            color: Color(0xFF5F6368),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _selectedDate != null
+                                ? '${_selectedDate!.day}.${_selectedDate!.month}.${_selectedDate!.year}'
+                                : appLocalizations?.translate('date') ?? 'Дата',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: _selectedDate != null
+                                  ? const Color(0xFF41454A)
+                                  : const Color(0xFF9E9E9E),
+                              fontFamily: 'Plus Jakarta Sans',
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.arrow_drop_down,
+                            size: 20,
+                            color: Color(0xFF5F6368),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Кнопка сброса
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _resetFilters,
+            child: Container(
+              height: 39,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color:
+                    (_selectedCategoryRaw != 'all_categories' ||
+                        _selectedPriceRaw != 'any_price' ||
+                        _selectedCityRaw != 'all_cities' ||
+                        _selectedDate != null)
+                    ? const Color(0xFF0F7EDE)
+                    : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      (_selectedCategoryRaw != 'all_categories' ||
+                          _selectedPriceRaw != 'any_price' ||
+                          _selectedCityRaw != 'all_cities' ||
+                          _selectedDate != null)
+                      ? const Color(0xFF0F7EDE)
+                      : const Color(0xFFE0E0E0),
+                  width: 1.5,
                 ),
               ),
-          ],
-        ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.clear_all,
+                    size: 18,
+                    color:
+                        (_selectedCategoryRaw != 'all_categories' ||
+                            _selectedPriceRaw != 'any_price' ||
+                            _selectedCityRaw != 'all_cities' ||
+                            _selectedDate != null)
+                        ? Colors.white
+                        : const Color(0xFF9E9E9E),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    appLocalizations?.translate('reset') ?? 'Сбросить',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color:
+                          (_selectedCategoryRaw != 'all_categories' ||
+                              _selectedPriceRaw != 'any_price' ||
+                              _selectedCityRaw != 'all_cities' ||
+                              _selectedDate != null)
+                          ? Colors.white
+                          : const Color(0xFF9E9E9E),
+                      fontFamily: 'Plus Jakarta Sans',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1692,10 +2000,12 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
             ),
             if (_selectedCategoryRaw != 'all_categories' ||
                 _selectedPriceRaw != 'any_price' ||
+                _selectedCityRaw != 'all_cities' ||
                 _selectedDate != null)
               const SizedBox(height: 24),
             if (_selectedCategoryRaw != 'all_categories' ||
                 _selectedPriceRaw != 'any_price' ||
+                _selectedCityRaw != 'all_cities' ||
                 _selectedDate != null)
               ElevatedButton(
                 onPressed: _resetFilters,
@@ -1942,14 +2252,11 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                   const Spacer(),
                   if (order['telephone'] != null &&
                       order['telephone'].toString().isNotEmpty)
-                    // Кнопка показа телефона
                     OutlinedButton(
                       onPressed: () {
-                        // Проверяем подписку при нажатии на кнопку "Показать телефон"
                         if (_hasActiveSubscription()) {
                           _showPhoneNumber(order['telephone'].toString());
                         } else {
-                          // Если нет подписки - показываем QR код Kaspi
                           print('❌ Нет активной подписки, открываем QR код');
                           _launchUrl(
                             'https://qr.kaspi.kz/19134627698424934147714893150004931409130',
@@ -1988,10 +2295,8 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                       ),
                     )
                   else
-                    // Если нет телефона - показываем кнопку "Нет подписки"
                     OutlinedButton(
                       onPressed: () {
-                        // При нажатии на кнопку "Нет подписки" показываем QR код
                         Navigator.push(
                           context,
                           MaterialPageRoute(
