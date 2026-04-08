@@ -74,18 +74,18 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     );
   }
 
- @override
-void didChangeDependencies() {
-  super.didChangeDependencies();
-  
-  if (!_initialized) {
-    _initialized = true;
-    _loadUserProfile();
-    _loadCategories();
-    _loadCities(); // Добавьте эту строку
-    _fetchOrders();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (!_initialized) {
+      _initialized = true;
+      _loadUserProfile();
+      _loadCategories();
+      _loadCities(); // Добавьте эту строку
+      _fetchOrders();
+    }
   }
-}
 
   void _initAnimation() {
     _animationController = AnimationController(
@@ -261,21 +261,22 @@ void didChangeDependencies() {
     }
   }
 
-// Добавьте этот метод в класс:
-Future<void> _loadCities() async {
-  if (!mounted) return;
-  
-  try {
-    final cities = await ApiService.getCities();
-    if (mounted) {
-      setState(() {
-        _cities = List<Map<String, dynamic>>.from(cities);
-      });
+  // Добавьте этот метод в класс:
+  Future<void> _loadCities() async {
+    if (!mounted) return;
+
+    try {
+      final cities = await ApiService.getCities();
+      if (mounted) {
+        setState(() {
+          _cities = List<Map<String, dynamic>>.from(cities);
+        });
+      }
+    } catch (e) {
+      print('Ошибка загрузки городов: $e');
     }
-  } catch (e) {
-    print('Ошибка загрузки городов: $e');
   }
-}
+
   void _showError(String message) {
     if (!mounted) return;
 
@@ -361,52 +362,58 @@ Future<void> _loadCities() async {
   }
 
   void _applyLocalFilters() {
-  if (!mounted) return;
+    if (!mounted) return;
 
-  List<dynamic> filtered = List.from(_orders);
-  final appLocalizations = AppLocalizations.of(context);
+    List<dynamic> filtered = List.from(_orders);
+    final appLocalizations = AppLocalizations.of(context);
 
-  final isAllCategories = _selectedCategoryRaw == 'all_categories';
-  final isAnyPrice = _selectedPriceRaw == 'any_price';
-  final isAllCities = _selectedCityRaw == 'all_cities';
+    final isAllCategories = _selectedCategoryRaw == 'all_categories';
+    final isAnyPrice = _selectedPriceRaw == 'any_price';
+    final isAllCities = _selectedCityRaw == 'all_cities';
 
-  // Фильтр по категории
-  if (!isAllCategories && _selectedCategoryRaw != null) {
-    filtered = filtered.where((order) {
-      final category = order['category']?['name']?.toString() ?? '';
-      return category.toLowerCase().contains(
-        _selectedCategoryRaw!.toLowerCase(),
-      );
-    }).toList();
-  }
-
-  // Фильтр по цене
-  if (!isAnyPrice &&
-      _selectedPriceRaw != null &&
-      _selectedPriceRaw!.contains('-')) {
-    try {
-      final priceRange = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
-      final minPrice = double.tryParse(priceRange[0].trim()) ?? 0;
-      final maxPrice =
-          double.tryParse(priceRange[1].trim()) ?? double.infinity;
+    // Фильтр по категории
+    if (!isAllCategories && _selectedCategoryRaw != null) {
       filtered = filtered.where((order) {
-        final priceStr = order['price']?.toString() ?? '0';
-        final price = double.tryParse(priceStr) ?? 0;
-        return price >= minPrice && price <= maxPrice;
+        final category = order['category']?['name']?.toString() ?? '';
+        return category.toLowerCase().contains(
+          _selectedCategoryRaw!.toLowerCase(),
+        );
       }).toList();
-    } catch (e) {}
-  }
+    }
 
-  // Фильтр по городу (НОВЫЙ)
-  if (!isAllCities && _selectedCityRaw != null) {
-    filtered = filtered.where((order) {
-      final city = order['city']?['name']?.toString() ?? '';
-      return city.toLowerCase() == _selectedCityRaw!.toLowerCase();
-    }).toList();
-  }
+    // Фильтр по цене - улучшенная обработка
+    if (!isAnyPrice &&
+        _selectedPriceRaw != null &&
+        _selectedPriceRaw!.contains('-')) {
+      try {
+        // Удаляем " тг" и разбиваем на min и max
+        String priceRangeStr = _selectedPriceRaw!.replaceAll(' тг', '');
+        final parts = priceRangeStr.split('-');
+        if (parts.length == 2) {
+          final minPrice = double.tryParse(parts[0].trim()) ?? 0;
+          final maxPrice = double.tryParse(parts[1].trim()) ?? double.infinity;
 
-  setState(() => _filteredOrders = filtered);
-}
+          filtered = filtered.where((order) {
+            final priceStr = order['price']?.toString() ?? '0';
+            final price = double.tryParse(priceStr) ?? 0;
+            return price >= minPrice && price <= maxPrice;
+          }).toList();
+        }
+      } catch (e) {
+        print('Ошибка фильтрации по цене: $e');
+      }
+    }
+
+    // Фильтр по городу
+    if (!isAllCities && _selectedCityRaw != null) {
+      filtered = filtered.where((order) {
+        final city = order['city']?['name']?.toString() ?? '';
+        return city.toLowerCase() == _selectedCityRaw!.toLowerCase();
+      }).toList();
+    }
+
+    setState(() => _filteredOrders = filtered);
+  }
 
   void _applyFilters() {
     if (!mounted) return;
@@ -485,22 +492,25 @@ Future<void> _loadCities() async {
     }
   }
 
-void _resetFilters() {
-  final appLocalizations = AppLocalizations.of(context);
-  setState(() {
-    _selectedCategoryRaw = 'all_categories';
-    _selectedPriceRaw = 'any_price';
-    _selectedCityRaw = 'all_cities'; // Добавьте
-    _selectedCategory = appLocalizations?.translate('all_categories') ?? 'Все категории';
-    _selectedPrice = appLocalizations?.translate('any_price') ?? 'Любая стоимость';
-    _selectedCity = appLocalizations?.translate('all_cities') ?? 'Все города'; // Добавьте
-    _selectedDate = null;
-  });
-  _removeCategoryOverlay();
-  _removePriceOverlay();
-  _removeCityOverlay(); // Добавьте
-  _fetchOrders();
-}
+  void _resetFilters() {
+    final appLocalizations = AppLocalizations.of(context);
+    setState(() {
+      _selectedCategoryRaw = 'all_categories';
+      _selectedPriceRaw = 'any_price';
+      _selectedCityRaw = 'all_cities'; // Добавьте
+      _selectedCategory =
+          appLocalizations?.translate('all_categories') ?? 'Все категории';
+      _selectedPrice =
+          appLocalizations?.translate('any_price') ?? 'Любая стоимость';
+      _selectedCity =
+          appLocalizations?.translate('all_cities') ?? 'Все города'; // Добавьте
+      _selectedDate = null;
+    });
+    _removeCategoryOverlay();
+    _removePriceOverlay();
+    _removeCityOverlay(); // Добавьте
+    _fetchOrders();
+  }
 
   void _navigateToOrderDetail(Map<String, dynamic> order) {
     final appLocalizations = AppLocalizations.of(context);
@@ -889,17 +899,38 @@ void _resetFilters() {
     final size = renderBox?.size ?? Size.zero;
     final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
 
+    // Динамически определяем максимальную цену из всех заказов
     double minValue = 0;
-    double maxValue = 100000;
+    double maxValue = 100000; // значение по умолчанию
+
+    // Находим максимальную цену среди всех заказов
+    if (_orders.isNotEmpty) {
+      double maxOrderPrice = 0;
+      for (var order in _orders) {
+        final priceStr = order['price']?.toString() ?? '0';
+        final price = double.tryParse(priceStr) ?? 0;
+        if (price > maxOrderPrice) {
+          maxOrderPrice = price;
+        }
+      }
+      maxValue = maxOrderPrice > 0 ? maxOrderPrice : 100000;
+      // Добавляем 10% запаса для удобства
+      maxValue = maxValue * 1.1;
+    }
+
     double currentMinValue = 0;
-    double currentMaxValue = 100000;
+    double currentMaxValue = maxValue;
 
     if (_selectedPriceRaw != null &&
         _selectedPriceRaw != 'any_price' &&
         _selectedPriceRaw!.contains('-')) {
       final parts = _selectedPriceRaw!.replaceAll(' тг', '').split('-');
       currentMinValue = double.tryParse(parts[0].trim()) ?? 0;
-      currentMaxValue = double.tryParse(parts[1].trim()) ?? 100000;
+      currentMaxValue = double.tryParse(parts[1].trim()) ?? maxValue;
+
+      // Корректируем если значения выходят за пределы
+      if (currentMaxValue > maxValue) currentMaxValue = maxValue;
+      if (currentMinValue < 0) currentMinValue = 0;
     }
 
     _priceOverlayEntry = OverlayEntry(
@@ -1013,7 +1044,8 @@ void _resetFilters() {
                                       onChanged: (value) {
                                         final doubleValue =
                                             double.tryParse(value) ?? 0;
-                                        if (doubleValue <= currentMaxValue) {
+                                        if (doubleValue <= currentMaxValue &&
+                                            doubleValue <= maxValue) {
                                           setState(
                                             () => currentMinValue = doubleValue,
                                           );
@@ -1064,8 +1096,9 @@ void _resetFilters() {
                                       ),
                                       onChanged: (value) {
                                         final doubleValue =
-                                            double.tryParse(value) ?? 100000;
-                                        if (doubleValue >= currentMinValue) {
+                                            double.tryParse(value) ?? maxValue;
+                                        if (doubleValue >= currentMinValue &&
+                                            doubleValue <= maxValue) {
                                           setState(
                                             () => currentMaxValue = doubleValue,
                                           );
@@ -1179,7 +1212,7 @@ void _resetFilters() {
                                       _selectedPrice = priceString;
                                     }
                                   });
-                                  _applyFilters();
+                                  _applyLocalFilters();
                                   _removePriceOverlay();
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -1219,76 +1252,75 @@ void _resetFilters() {
     _priceOverlayEntry = null;
   }
 
-void _toggleCityOverlay() {
-  if (_cityOverlayEntry != null) {
-    _removeCityOverlay();
-  } else {
-    _removeCategoryOverlay();
-    _removePriceOverlay();
-    _showCityOverlay();
-  }
-}
-
-
-Widget _buildCityItem(String rawValue, String displayName) {
-  final isSelected = _selectedCityRaw == rawValue;
-
-  return GestureDetector(
-    onTap: () {
-      setState(() {
-        _selectedCityRaw = rawValue;
-        _selectedCity = displayName;
-      });
-      _applyLocalFilters();
+  void _toggleCityOverlay() {
+    if (_cityOverlayEntry != null) {
       _removeCityOverlay();
-    },
-    child: Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        border: isSelected
-            ? const Border(
-                left: BorderSide(color: Color(0xFF0F7EDE), width: 3),
-              )
-            : null,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFF0F7EDE)
-                    : const Color(0xFFCBCDCE),
-                width: 1.5,
+    } else {
+      _removeCategoryOverlay();
+      _removePriceOverlay();
+      _showCityOverlay();
+    }
+  }
+
+  Widget _buildCityItem(String rawValue, String displayName) {
+    final isSelected = _selectedCityRaw == rawValue;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedCityRaw = rawValue;
+          _selectedCity = displayName;
+        });
+        _applyLocalFilters();
+        _removeCityOverlay();
+      },
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          border: isSelected
+              ? const Border(
+                  left: BorderSide(color: Color(0xFF0F7EDE), width: 3),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFF0F7EDE)
+                      : const Color(0xFFCBCDCE),
+                  width: 1.5,
+                ),
+                color: isSelected ? const Color(0xFF0F7EDE) : Colors.white,
               ),
-              color: isSelected ? const Color(0xFF0F7EDE) : Colors.white,
+              child: isSelected
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null,
             ),
-            child: isSelected
-                ? const Icon(Icons.check, size: 12, color: Colors.white)
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              displayName,
-              style: TextStyle(
-                fontSize: 14,
-                color: isSelected
-                    ? const Color(0xFF0F7EDE)
-                    : const Color(0xFF41454A),
-                fontFamily: 'Plus Jakarta Sans',
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayName,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isSelected
+                      ? const Color(0xFF0F7EDE)
+                      : const Color(0xFF41454A),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   void _removeCityOverlay() {
     _cityOverlayEntry?.remove();
@@ -1493,102 +1525,101 @@ Widget _buildCityItem(String rawValue, String displayName) {
     );
   }
 
-void _showCityOverlay() {
-  final appLocalizations = AppLocalizations.of(context);
-  final renderBox = _cityKey.currentContext?.findRenderObject() as RenderBox?;
-  final size = renderBox?.size ?? Size.zero;
-  final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+  void _showCityOverlay() {
+    final appLocalizations = AppLocalizations.of(context);
+    final renderBox = _cityKey.currentContext?.findRenderObject() as RenderBox?;
+    final size = renderBox?.size ?? Size.zero;
+    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
 
-  _cityOverlayEntry = OverlayEntry(
-    builder: (context) => Positioned(
-      left: offset.dx,
-      top: offset.dy + size.height + 4,
-      child: CompositedTransformFollower(
-        link: _cityLayerLink,
-        showWhenUnlinked: false,
-        offset: Offset(0, size.height + 4),
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: size.width,
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.4,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        appLocalizations?.translate('city') ?? 'Город',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: _removeCityOverlay,
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            size: 16,
-                            color: Color(0xFF5F6368),
-                          ),
-                        ),
-                      ),
-                    ],
+    _cityOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx,
+        top: offset.dy + size.height + 4,
+        child: CompositedTransformFollower(
+          link: _cityLayerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: size.width,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.4,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    spreadRadius: 1,
                   ),
-                ),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      _buildCityItem(
-                        'all_cities',
-                        appLocalizations?.translate('all_cities') ?? 'Все города',
-                      ),
-                      ..._cities
-                          .map(
-                            (city) => _buildCityItem(
-                              city['name'],
-                              city['name'],
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          appLocalizations?.translate('city') ?? 'Город',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: _removeCityOverlay,
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F5F5),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                          )
-                          .toList(),
-                    ],
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Color(0xFF5F6368),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        _buildCityItem(
+                          'all_cities',
+                          appLocalizations?.translate('all_cities') ??
+                              'Все города',
+                        ),
+                        ..._cities
+                            .map(
+                              (city) =>
+                                  _buildCityItem(city['name'], city['name']),
+                            )
+                            .toList(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-  Overlay.of(context).insert(_cityOverlayEntry!);
-}
+    );
+    Overlay.of(context).insert(_cityOverlayEntry!);
+  }
 
   Widget _buildFiltersRow(AppLocalizations? appLocalizations) {
     final allCategories =
