@@ -29,7 +29,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
 
   String? _selectedCategory;
   String? _selectedPrice;
-  String? _selectedCity; // Добавлено для города
+  String? _selectedCity;
   DateTime? _selectedDate;
 
   final ProfileApi _profileApi = ProfileApi();
@@ -38,31 +38,34 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   bool _userDataLoaded = false;
   bool _hasSubscription = false;
   List<Map<String, dynamic>> _categories = [];
-  List<Map<String, dynamic>> _cities = []; // Добавлено для списка городов
+  List<Map<String, dynamic>> _cities = [];
 
   OverlayEntry? _categoryOverlayEntry;
   OverlayEntry? _priceOverlayEntry;
-  OverlayEntry? _cityOverlayEntry; // Добавлено для города
+  OverlayEntry? _cityOverlayEntry;
   final LayerLink _categoryLayerLink = LayerLink();
   final LayerLink _priceLayerLink = LayerLink();
-  final LayerLink _cityLayerLink = LayerLink(); // Добавлено для города
+  final LayerLink _cityLayerLink = LayerLink();
   final GlobalKey _categoryKey = GlobalKey();
   final GlobalKey _priceKey = GlobalKey();
-  final GlobalKey _cityKey = GlobalKey(); // Добавлено для города
+  final GlobalKey _cityKey = GlobalKey();
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
   String? _selectedCategoryRaw;
   String? _selectedPriceRaw;
-  String? _selectedCityRaw; // Добавлено для города
+  String? _selectedCityRaw;
+  
+  // Новое поле для хранения города пользователя
+  String? _userCityName;
 
   @override
   void initState() {
     super.initState();
     _selectedCategoryRaw = 'all_categories';
     _selectedPriceRaw = 'any_price';
-    _selectedCityRaw = 'all_cities'; // Добавлено для города
+    _selectedCityRaw = 'all_cities';
 
     _initAnimation();
 
@@ -82,7 +85,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       _initialized = true;
       _loadUserProfile();
       _loadCategories();
-      _loadCities(); // Добавьте эту строку
+      _loadCities();
       _fetchOrders();
     }
   }
@@ -103,7 +106,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
   void dispose() {
     _removeCategoryOverlay();
     _removePriceOverlay();
-    _removeCityOverlay(); // Добавлено для города
+    _removeCityOverlay();
     _animationController.dispose();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -174,6 +177,14 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
         final user = response['data'];
         print('📱 Данные пользователя: $user');
         print('📋 Подписки: ${user['subscriptions']}');
+        
+        // Извлекаем город пользователя
+        final userCity = user['city'];
+        String? userCityName;
+        if (userCity != null && userCity['name'] != null) {
+          userCityName = userCity['name'];
+          print('🏙️ Город пользователя: $userCityName');
+        }
 
         bool hasActiveSub = false;
         final subscriptions = user['subscriptions'] as List?;
@@ -192,7 +203,13 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
           _isLoadingUser = false;
           _userDataLoaded = true;
           _hasSubscription = hasActiveSub;
+          _userCityName = userCityName;
         });
+
+        // После загрузки профиля, если есть город пользователя, устанавливаем фильтр
+        if (_userCityName != null && _userCityName!.isNotEmpty) {
+          _setDefaultCityFilter();
+        }
 
         print('✅ Профиль загружен, подписка активна: $_hasSubscription');
       }
@@ -235,6 +252,27 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     }
   }
 
+  // Новый метод для установки фильтра по городу пользователя
+  void _setDefaultCityFilter() {
+    if (_userCityName == null || _userCityName!.isEmpty) return;
+    
+    final appLocalizations = AppLocalizations.of(context);
+    
+    setState(() {
+      _selectedCityRaw = _userCityName;
+      _selectedCity = _userCityName;
+    });
+    
+    print('🏙️ Установлен фильтр по городу: $_userCityName');
+    
+    // Применяем фильтр после загрузки заказов
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_orders.isNotEmpty) {
+        _applyLocalFilters();
+      }
+    });
+  }
+
   bool _hasActiveSubscription() {
     print(
       '🔍 Проверка подписки: _userDataLoaded=$_userDataLoaded, _hasSubscription=$_hasSubscription',
@@ -261,7 +299,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     }
   }
 
-  // Добавьте этот метод в класс:
   Future<void> _loadCities() async {
     if (!mounted) return;
 
@@ -271,6 +308,17 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
         setState(() {
           _cities = List<Map<String, dynamic>>.from(cities);
         });
+        
+        // После загрузки списка городов проверяем, нужно ли установить фильтр по городу
+        if (_userCityName != null && _selectedCityRaw == 'all_cities') {
+          // Проверяем, существует ли город пользователя в списке
+          final cityExists = _cities.any((city) => 
+              city['name']?.toString().toLowerCase() == _userCityName!.toLowerCase());
+          
+          if (cityExists) {
+            _setDefaultCityFilter();
+          }
+        }
       }
     } catch (e) {
       print('Ошибка загрузки городов: $e');
@@ -381,12 +429,11 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       }).toList();
     }
 
-    // Фильтр по цене - улучшенная обработка
+    // Фильтр по цене
     if (!isAnyPrice &&
         _selectedPriceRaw != null &&
         _selectedPriceRaw!.contains('-')) {
       try {
-        // Удаляем " тг" и разбиваем на min и max
         String priceRangeStr = _selectedPriceRaw!.replaceAll(' тг', '');
         final parts = priceRangeStr.split('-');
         if (parts.length == 2) {
@@ -408,7 +455,12 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     if (!isAllCities && _selectedCityRaw != null) {
       filtered = filtered.where((order) {
         final city = order['city']?['name']?.toString() ?? '';
-        return city.toLowerCase() == _selectedCityRaw!.toLowerCase();
+        // Для города пользователя используем точное совпадение
+        if (_selectedCityRaw == _userCityName) {
+          return city.toLowerCase() == _selectedCityRaw!.toLowerCase();
+        }
+        // Для других городов используем contains
+        return city.toLowerCase().contains(_selectedCityRaw!.toLowerCase());
       }).toList();
     }
 
@@ -455,6 +507,10 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     if (!isAllCities && _selectedCityRaw != null) {
       filtered = filtered.where((order) {
         final city = order['city']?['name']?.toString() ?? '';
+        // Для города пользователя используем точное совпадение
+        if (_selectedCityRaw == _userCityName) {
+          return city.toLowerCase() == _selectedCityRaw!.toLowerCase();
+        }
         return city.toLowerCase().contains(_selectedCityRaw!.toLowerCase());
       }).toList();
     }
@@ -494,21 +550,31 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
 
   void _resetFilters() {
     final appLocalizations = AppLocalizations.of(context);
+    
+    // Определяем, должен ли город пользователя оставаться в фильтре
+    final shouldKeepUserCity = _userCityName != null && _userCityName!.isNotEmpty;
+    
     setState(() {
       _selectedCategoryRaw = 'all_categories';
       _selectedPriceRaw = 'any_price';
-      _selectedCityRaw = 'all_cities'; // Добавьте
-      _selectedCategory =
-          appLocalizations?.translate('all_categories') ?? 'Все категории';
-      _selectedPrice =
-          appLocalizations?.translate('any_price') ?? 'Любая стоимость';
-      _selectedCity =
-          appLocalizations?.translate('all_cities') ?? 'Все города'; // Добавьте
+      _selectedCategory = appLocalizations?.translate('all_categories') ?? 'Все категории';
+      _selectedPrice = appLocalizations?.translate('any_price') ?? 'Любая стоимость';
       _selectedDate = null;
+      
+      // Сбрасываем фильтр города только если нет города пользователя
+      if (!shouldKeepUserCity) {
+        _selectedCityRaw = 'all_cities';
+        _selectedCity = appLocalizations?.translate('all_cities') ?? 'Все города';
+      } else {
+        // Оставляем город пользователя
+        _selectedCityRaw = _userCityName;
+        _selectedCity = _userCityName;
+      }
     });
+    
     _removeCategoryOverlay();
     _removePriceOverlay();
-    _removeCityOverlay(); // Добавьте
+    _removeCityOverlay();
     _fetchOrders();
   }
 
@@ -899,11 +965,9 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     final size = renderBox?.size ?? Size.zero;
     final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
 
-    // Динамически определяем максимальную цену из всех заказов
     double minValue = 0;
-    double maxValue = 100000; // значение по умолчанию
+    double maxValue = 100000;
 
-    // Находим максимальную цену среди всех заказов
     if (_orders.isNotEmpty) {
       double maxOrderPrice = 0;
       for (var order in _orders) {
@@ -914,7 +978,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
         }
       }
       maxValue = maxOrderPrice > 0 ? maxOrderPrice : 100000;
-      // Добавляем 10% запаса для удобства
       maxValue = maxValue * 1.1;
     }
 
@@ -928,7 +991,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       currentMinValue = double.tryParse(parts[0].trim()) ?? 0;
       currentMaxValue = double.tryParse(parts[1].trim()) ?? maxValue;
 
-      // Корректируем если значения выходят за пределы
       if (currentMaxValue > maxValue) currentMaxValue = maxValue;
       if (currentMinValue < 0) currentMinValue = 0;
     }
@@ -1262,6 +1324,102 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     }
   }
 
+  void _showCityOverlay() {
+    final appLocalizations = AppLocalizations.of(context);
+    final renderBox = _cityKey.currentContext?.findRenderObject() as RenderBox?;
+    final size = renderBox?.size ?? Size.zero;
+    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+    _cityOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx,
+        top: offset.dy + size.height + 4,
+        child: CompositedTransformFollower(
+          link: _cityLayerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: size.width,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.4,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          appLocalizations?.translate('city') ?? 'Город',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF41454A),
+                            fontFamily: 'Plus Jakarta Sans',
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: _removeCityOverlay,
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F5F5),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Color(0xFF5F6368),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        _buildCityItem(
+                          'all_cities',
+                          appLocalizations?.translate('all_cities') ??
+                              'Все города',
+                        ),
+                        ..._cities
+                            .map(
+                              (city) =>
+                                  _buildCityItem(city['name'], city['name']),
+                            )
+                            .toList(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_cityOverlayEntry!);
+  }
+
   Widget _buildCityItem(String rawValue, String displayName) {
     final isSelected = _selectedCityRaw == rawValue;
 
@@ -1525,102 +1683,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
     );
   }
 
-  void _showCityOverlay() {
-    final appLocalizations = AppLocalizations.of(context);
-    final renderBox = _cityKey.currentContext?.findRenderObject() as RenderBox?;
-    final size = renderBox?.size ?? Size.zero;
-    final offset = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-
-    _cityOverlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: offset.dx,
-        top: offset.dy + size.height + 4,
-        child: CompositedTransformFollower(
-          link: _cityLayerLink,
-          showWhenUnlinked: false,
-          offset: Offset(0, size.height + 4),
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: size.width,
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.4,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-                    child: Row(
-                      children: [
-                        Text(
-                          appLocalizations?.translate('city') ?? 'Город',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF41454A),
-                            fontFamily: 'Plus Jakarta Sans',
-                          ),
-                        ),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: _removeCityOverlay,
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF5F5F5),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Color(0xFF5F6368),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        _buildCityItem(
-                          'all_cities',
-                          appLocalizations?.translate('all_cities') ??
-                              'Все города',
-                        ),
-                        ..._cities
-                            .map(
-                              (city) =>
-                                  _buildCityItem(city['name'], city['name']),
-                            )
-                            .toList(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context).insert(_cityOverlayEntry!);
-  }
-
   Widget _buildFiltersRow(AppLocalizations? appLocalizations) {
     final allCategories =
         appLocalizations?.translate('all_categories') ?? 'Все категории';
@@ -1633,13 +1695,11 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
       color: Colors.white,
       child: Row(
         children: [
-          // Горизонтальный скролл для фильтров
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  // Фильтр по категории
                   CompositedTransformTarget(
                     link: _categoryLayerLink,
                     child: GestureDetector(
@@ -1691,8 +1751,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // Фильтр по цене
                   CompositedTransformTarget(
                     link: _priceLayerLink,
                     child: GestureDetector(
@@ -1744,8 +1802,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // ФИЛЬТР ПО ГОРОДУ (НОВЫЙ)
                   CompositedTransformTarget(
                     link: _cityLayerLink,
                     child: GestureDetector(
@@ -1797,8 +1853,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // Фильтр по дате
                   GestureDetector(
                     onTap: () => _selectDate(context),
                     child: Container(
@@ -1847,8 +1901,6 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
               ),
             ),
           ),
-
-          // Кнопка сброса
           const SizedBox(width: 12),
           GestureDetector(
             onTap: _resetFilters,

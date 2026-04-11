@@ -53,7 +53,7 @@ class ProfileApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.put(url, body: body);
+      final response = await _client.put(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {
@@ -94,7 +94,7 @@ class ProfileApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.patch(url, body: body);
+      final response = await _client.patch(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {
@@ -114,7 +114,7 @@ class ProfileApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {
@@ -135,10 +135,10 @@ class ProfileApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
 
-      if (response['access_token'] != null) {
-        await AuthService.saveToken(response['access_token']);
+      if (response['accessToken'] != null) {
+        await AuthService.saveToken(response['accessToken']);
       }
 
       ApiLogger.logResponse(200, response);

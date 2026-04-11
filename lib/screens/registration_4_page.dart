@@ -91,76 +91,88 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
     setState(() {});
   }
 
-  Future<void> _confirmCode() async {
-    final appLocalizations = AppLocalizations.of(context)!;
-    final code = _currentInputCode;
-    
-    if (code.length != 4 || _isLoading) return;
+Future<void> _confirmCode() async {
+  final appLocalizations = AppLocalizations.of(context)!;
+  final code = _currentInputCode;
+  
+  if (code.length != 4 || _isLoading) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      final response = await ApiService.confirmPhone(
-        telephone: widget.phoneNumber,
-        code: code,
+  try {
+    final response = await ApiService.confirmPhone(
+      telephone: widget.phoneNumber,
+      code: code,
+    );
+
+    // Сохраняем пару токенов
+    final accessToken = response['accessToken'];
+    final refreshToken = response['refreshToken'];
+    final ttl = response['ttl'];
+    final refreshTtl = response['refreshTtl'];
+
+    if (accessToken != null && refreshToken != null) {
+      await AuthService.saveTokenPair(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        ttl: ttl ?? 3600,
+        refreshTtl: refreshTtl ?? 86400,
       );
-
-      final token = response['accessToken'];
-      if (token != null) {
-        await AuthService.saveToken(token);
-      }
-
-      String? roleToSave;
-      if (_serverPayload != null && _serverPayload!['activeMode'] != null) {
-        roleToSave = _serverPayload!['activeMode'];
-      } else {
-        final profile = await ApiService.getProfile();
-        roleToSave = profile['data']['activeMode'];
-      }
-
-      if (roleToSave != null) {
-        await AuthService.saveUserRole(roleToSave);
-      }
-
-      if (!mounted) return;
-
-      // Показываем успешное уведомление
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(appLocalizations.translate('code_confirmed_success')),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      // Редирект
-      if (roleToSave == 'master') {
-        Navigator.pushNamedAndRemoveUntil(context, '/account-master', (route) => false);
-      } else {
-        Navigator.pushNamedAndRemoveUntil(context, '/account-client', (route) => false);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${appLocalizations.translate('error')}: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      
-      // Очищаем поля при ошибке
-      for (var controller in _controllers) {
-        controller.clear();
-      }
-      _focusNodes[0].requestFocus();
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    } else {
+      throw Exception('Токены не получены');
     }
-  }
 
+    // Получаем роль пользователя
+    String? roleToSave;
+    if (_serverPayload != null && _serverPayload!['activeMode'] != null) {
+      roleToSave = _serverPayload!['activeMode'];
+    } else {
+      final profile = await ApiService.getProfile();
+      roleToSave = profile['data']['activeMode'];
+    }
+
+    if (roleToSave != null) {
+      await AuthService.saveUserRole(roleToSave);
+    }
+
+    if (!mounted) return;
+
+    // Показываем успешное уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(appLocalizations.translate('code_confirmed_success')),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    // Редирект
+    if (roleToSave == 'master') {
+      Navigator.pushNamedAndRemoveUntil(context, '/account-master', (route) => false);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(context, '/account-client', (route) => false);
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${appLocalizations.translate('error')}: $e'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    
+    // Очищаем поля при ошибке
+    for (var controller in _controllers) {
+      controller.clear();
+    }
+    _focusNodes[0].requestFocus();
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
   Future<void> _resendCode() async {
     final appLocalizations = AppLocalizations.of(context)!;
     

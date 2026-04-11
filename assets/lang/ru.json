@@ -306,5 +306,6 @@
     "redirect_message": "Переход на страницу оплаты Kaspi",
     "redirect_countdown": "Автоматический переход через",
     "pay_now_button": "💳 Перейти к оплате сейчас",
-  "all_cities": "Все города"
+  "all_cities": "Все города",
+  "using_app_agreement": "Используя приложение, вы соглашаетесь с"
 }

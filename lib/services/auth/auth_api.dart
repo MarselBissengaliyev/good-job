@@ -17,7 +17,7 @@ class AuthApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {
@@ -46,7 +46,7 @@ class AuthApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {
@@ -67,20 +67,20 @@ class AuthApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
       ApiLogger.logResponse(200, response);
 
       // ВАЖНО: Сохраняем токены при успешной авторизации
-      if (response['access_token'] != null) {
-        await AuthService.saveToken(response['access_token']);
+      if (response['accessToken'] != null) {
+        await AuthService.saveToken(response['accessToken']);
 
         if (response['ttl'] != null) {
           await AuthService.saveTokenExpiry(response['ttl']);
         }
 
-        // Если API вернет refresh_token (когда бэкендеры добавят)
-        if (response['refresh_token'] != null) {
-          await AuthService.saveRefreshToken(response['refresh_token']);
+        // Если API вернет refreshToken (когда бэкендеры добавят)
+        if (response['refreshToken'] != null) {
+          await AuthService.saveRefreshToken(response['refreshToken']);
         }
       }
 
@@ -91,16 +91,16 @@ class AuthApi {
     }
   }
 
-  Future<Map<String, dynamic>> refreshToken({required String token}) async {
+  Future<Map<String, dynamic>> refreshToken({required String refreshToken}) async {
     const method = 'POST';
     const url = '/auth/refresh';
-    final body = {'token': token};
+    final body = {'refreshToken': refreshToken};
 
     ApiLogger.logRequest(method, url, body: body);
 
     try {
       final client = ApiClient(); // без токена
-      final response = await client.post(url, body: body);
+      final response = await client.post(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {

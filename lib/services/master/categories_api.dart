@@ -41,7 +41,7 @@ class CategoriesApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {

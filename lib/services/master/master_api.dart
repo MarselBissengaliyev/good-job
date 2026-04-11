@@ -110,7 +110,7 @@ class MasterApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.post(url, body: body);
+      final response = await _client.post(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {
@@ -136,7 +136,7 @@ class MasterApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      final response = await _client.put(url, body: body);
+      final response = await _client.put(url, data: body);
       ApiLogger.logResponse(200, response);
       return response;
     } catch (e) {

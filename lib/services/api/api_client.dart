@@ -14,257 +14,191 @@ class ApiClient {
 
   ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? ApiConfig.baseUrl;
 
-  Future<Map<String, String>> _getHeaders() async {
-    try {
+  // Получение заголовков с токеном (только если requireAuth=true и токен есть)
+  Future<Map<String, String>> _getHeaders({bool requireAuth = true}) async {
+    final headers = Map<String, String>.from(ApiConfig.defaultHeaders);
+    
+    if (requireAuth) {
       final token = await AuthService.getToken();
-      final headers = Map<String, String>.from(ApiConfig.defaultHeaders);
-
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
-
-      return headers;
-    } catch (e) {
-      ApiLogger.logError(e);
-      return ApiConfig.defaultHeaders;
+      // НЕ бросаем исключение, просто не добавляем токен
+      // Если API требует авторизацию, то вернет 401
     }
+    
+    return headers;
   }
 
-  // Метод для выполнения запросов с автоматическим обновлением токена
-  Future<dynamic> _requestWithRefresh(Future<dynamic> Function() request) async {
-    try {
-      return await request();
-    } on UnauthorizedException catch (e) {
-      // Если уже идет обновление токена, добавляем запрос в очередь
-      if (_isRefreshing) {
-        final completer = Completer<dynamic>();
-        _pendingRequests.add(completer);
-        return completer.future;
-      }
+  // Основной метод запроса с поддержкой refresh token
+  Future<dynamic> request(
+    String method,
+    String path, {
+    Map<String, dynamic>? data,
+    Map<String, String>? queryParams,
+    bool requireAuth = true,
+  }) async {
+    // Строим URI с query параметрами
+    var uri = Uri.parse('$baseUrl$path');
+    if (queryParams != null && queryParams.isNotEmpty) {
+      uri = uri.replace(queryParameters: queryParams);
+    }
 
-      // Пытаемся обновить токен
-      _isRefreshing = true;
-      try {
+    // Функция выполнения запроса
+    Future<dynamic> executeRequest() async {
+      final headers = await _getHeaders(requireAuth: requireAuth);
+      final body = data != null ? jsonEncode(data) : null;
+      
+      ApiLogger.logRequest(method, uri.toString(), headers: headers, body: data);
+      
+      http.Response response;
+      
+      switch (method.toUpperCase()) {
+        case 'GET':
+          response = await http.get(uri, headers: headers);
+          break;
+        case 'POST':
+          response = await http.post(uri, headers: headers, body: body);
+          break;
+        case 'PUT':
+          response = await http.put(uri, headers: headers, body: body);
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: headers);
+          break;
+        case 'PATCH':
+          response = await http.patch(uri, headers: headers, body: body);
+          break;
+        default:
+          throw ApiException('Unsupported HTTP method: $method');
+      }
+      
+      ApiLogger.logResponse(response.statusCode, response.body);
+      return _handleResponse(response);
+    }
+    
+    try {
+      return await executeRequest().timeout(
+        const Duration(seconds: ApiConfig.connectionTimeout),
+        onTimeout: () => throw ApiException('Превышено время ожидания'),
+      );
+    } on UnauthorizedException catch (e) {
+      // Если токен истек и требуется авторизация
+      if (requireAuth) {
+        // Пытаемся обновить токен
         final newToken = await _refreshToken();
+        
         if (newToken != null) {
-          // Сохраняем новый токен
-          await AuthService.saveToken(newToken);
+          // Повторяем запрос с новым токеном
+          final newHeaders = await _getHeaders(requireAuth: true);
+          final body = data != null ? jsonEncode(data) : null;
           
-          // Освобождаем ожидающие запросы
-          _pendingRequests.forEach((completer) {
-            completer.complete(request());
-          });
-          _pendingRequests.clear();
+          http.Response retryResponse;
           
-          // Повторяем исходный запрос с новым токеном
-          return await request();
+          switch (method.toUpperCase()) {
+            case 'GET':
+              retryResponse = await http.get(uri, headers: newHeaders);
+              break;
+            case 'POST':
+              retryResponse = await http.post(uri, headers: newHeaders, body: body);
+              break;
+            case 'PUT':
+              retryResponse = await http.put(uri, headers: newHeaders, body: body);
+              break;
+            case 'DELETE':
+              retryResponse = await http.delete(uri, headers: newHeaders);
+              break;
+            case 'PATCH':
+              retryResponse = await http.patch(uri, headers: newHeaders, body: body);
+              break;
+            default:
+              throw ApiException('Unsupported HTTP method: $method');
+          }
+          
+          ApiLogger.logResponse(retryResponse.statusCode, retryResponse.body);
+          return _handleResponse(retryResponse);
         } else {
-          // Не удалось обновить токен - разлогиниваем
+          // Не удалось обновить токен - очищаем данные
           await AuthService.clearAuthData();
-          _pendingRequests.forEach((completer) {
-            completer.completeError(UnauthorizedException('Сессия истекла'));
-          });
-          _pendingRequests.clear();
           rethrow;
         }
-      } catch (refreshError) {
-        // Ошибка при обновлении токена
-        _pendingRequests.forEach((completer) {
-          completer.completeError(refreshError);
-        });
-        _pendingRequests.clear();
-        rethrow;
-      } finally {
-        _isRefreshing = false;
       }
-    }
-  }
-
- // lib/services/api/api_client.dart - исправленный _refreshToken
-Future<String?> _refreshToken() async {
-  try {
-    final oldToken = await AuthService.getToken();
-    if (oldToken == null) return null;
-
-    // Важно: используем http напрямую, чтобы избежать циклических вызовов
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/refresh'),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $oldToken', // токен в заголовке, как в документации
-      },
-    ).timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['access_token'];
-    }
-    return null;
-  } catch (e) {
-    ApiLogger.logError('Refresh token error: $e');
-    return null;
-  }
-}
-
-  // Обновленные методы с поддержкой refresh
-  Future<dynamic> get(String path, {Map<String, String>? queryParams}) {
-    return _requestWithRefresh(() => _get(path, queryParams: queryParams));
-  }
-
-  Future<dynamic> _get(String path, {Map<String, String>? queryParams}) async {
-    final method = 'GET';
-    final uri = Uri.parse('$baseUrl$path').replace(queryParameters: queryParams);
-
-    try {
-      final headers = await _getHeaders();
-      ApiLogger.logRequest(method, uri.toString(), headers: headers);
-
-      final response = await http
-          .get(uri, headers: headers)
-          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-
-      ApiLogger.logResponse(response.statusCode, response.body);
-
-      return _handleResponse(response);
-    } on TimeoutException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Превышено время ожидания');
-    } on SocketException catch (e) {
-      ApiLogger.logError(e);
+      rethrow;
+    } on SocketException {
       throw ApiException('Ошибка сети. Проверьте подключение к интернету.');
     } catch (e) {
-      ApiLogger.logError(e);
       rethrow;
     }
   }
-
-  Future<dynamic> post(String path, {dynamic body}) {
-    return _requestWithRefresh(() => _post(path, body: body));
-  }
-
-  Future<dynamic> _post(String path, {dynamic body}) async {
-    final method = 'POST';
-    final uri = Uri.parse('$baseUrl$path');
-
+  
+  // Обновление токена с очередью запросов
+  Future<String?> _refreshToken() async {
+    // Если уже идет обновление, добавляем запрос в очередь
+    if (_isRefreshing) {
+      final completer = Completer<String?>();
+      _pendingRequests.add(completer);
+      return completer.future;
+    }
+    
+    _isRefreshing = true;
+    
     try {
-      final headers = await _getHeaders();
-      ApiLogger.logRequest(method, uri.toString(), headers: headers, body: body);
-
-      final response = await http
-          .post(uri, headers: headers, body: jsonEncode(body))
-          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-
-      ApiLogger.logResponse(response.statusCode, response.body);
-
-      return _handleResponse(response);
-    } on TimeoutException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Превышено время ожидания');
-    } on SocketException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Ошибка сети. Проверьте подключение к интернету.');
+      final refreshToken = await AuthService.getRefreshToken();
+      if (refreshToken == null || refreshToken.isEmpty) {
+        return null;
+      }
+      
+      // Вызываем API обновления (без авторизации)
+      final response = await request(
+        'POST',
+        '/api/auth/refresh',
+        data: {'refreshToken': refreshToken},
+        requireAuth: false, // Важно: не требуем авторизацию
+      );
+      
+      if (response['accessToken'] != null && response['refreshToken'] != null) {
+        // Сохраняем новые токены
+        await AuthService.saveToken(response['accessToken']);
+        await AuthService.saveRefreshToken(response['refreshToken']);
+        
+        if (response['ttl'] != null) {
+          await AuthService.saveTokenExpiry(response['ttl']);
+        }
+        if (response['refreshTtl'] != null) {
+          await AuthService.saveRefreshTokenExpiry(response['refreshTtl']);
+        }
+        
+        // Обрабатываем ожидающие запросы
+        for (final completer in _pendingRequests) {
+          completer.complete(response['accessToken']);
+        }
+        _pendingRequests.clear();
+        
+        return response['accessToken'];
+      }
+      
+      return null;
     } catch (e) {
-      ApiLogger.logError(e);
-      rethrow;
+      print('❌ Ошибка обновления токена: $e');
+      
+      // Обрабатываем ожидающие запросы с ошибкой
+      for (final completer in _pendingRequests) {
+        completer.completeError(e);
+      }
+      _pendingRequests.clear();
+      
+      return null;
+    } finally {
+      _isRefreshing = false;
     }
   }
 
-  Future<dynamic> put(String path, {dynamic body}) {
-    return _requestWithRefresh(() => _put(path, body: body));
-  }
-
-  Future<dynamic> _put(String path, {dynamic body}) async {
-    final method = 'PUT';
-    final uri = Uri.parse('$baseUrl$path');
-
-    try {
-      final headers = await _getHeaders();
-      ApiLogger.logRequest(method, uri.toString(), headers: headers, body: body);
-
-      final response = await http
-          .put(uri, headers: headers, body: jsonEncode(body))
-          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-
-      ApiLogger.logResponse(response.statusCode, response.body);
-
-      return _handleResponse(response);
-    } on TimeoutException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Превышено время ожидания');
-    } on SocketException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Ошибка сети. Проверьте подключение к интернету.');
-    } catch (e) {
-      ApiLogger.logError(e);
-      rethrow;
-    }
-  }
-
-  Future<dynamic> patch(String path, {dynamic body}) {
-    return _requestWithRefresh(() => _patch(path, body: body));
-  }
-
-  Future<dynamic> _patch(String path, {dynamic body}) async {
-    final method = 'PATCH';
-    final uri = Uri.parse('$baseUrl$path');
-
-    try {
-      final headers = await _getHeaders();
-      ApiLogger.logRequest(method, uri.toString(), headers: headers, body: body);
-
-      final response = await http
-          .patch(uri, headers: headers, body: jsonEncode(body))
-          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-
-      ApiLogger.logResponse(response.statusCode, response.body);
-
-      return _handleResponse(response);
-    } on TimeoutException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Превышено время ожидания');
-    } on SocketException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Ошибка сети. Проверьте подключение к интернету.');
-    } catch (e) {
-      ApiLogger.logError(e);
-      rethrow;
-    }
-  }
-
-  Future<dynamic> delete(String path) {
-    return _requestWithRefresh(() => _delete(path));
-  }
-
-  Future<dynamic> _delete(String path) async {
-    final method = 'DELETE';
-    final uri = Uri.parse('$baseUrl$path');
-
-    try {
-      final headers = await _getHeaders();
-      ApiLogger.logRequest(method, uri.toString(), headers: headers);
-
-      final response = await http
-          .delete(uri, headers: headers)
-          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-
-      ApiLogger.logResponse(response.statusCode, response.body);
-
-      return _handleResponse(response);
-    } on TimeoutException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Превышено время ожидания');
-    } on SocketException catch (e) {
-      ApiLogger.logError(e);
-      throw ApiException('Ошибка сети. Проверьте подключение к интернету.');
-    } catch (e) {
-      ApiLogger.logError(e);
-      rethrow;
-    }
-  }
-
+  // Обработка ответа
   dynamic _handleResponse(http.Response response) {
-    if (response.statusCode == 200 || response.statusCode == 201) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) {
+        return {};
+      }
       try {
         return jsonDecode(response.body);
       } catch (e) {
@@ -282,9 +216,30 @@ Future<String?> _refreshToken() async {
       throw ApiException('Ошибка: ${response.statusCode}');
     }
   }
+
+  // Упрощенные публичные методы
+  Future<dynamic> get(String path, {Map<String, String>? queryParams, bool requireAuth = true}) {
+    return request('GET', path, queryParams: queryParams, requireAuth: requireAuth);
+  }
+
+  Future<dynamic> post(String path, {Map<String, dynamic>? data, bool requireAuth = true}) {
+    return request('POST', path, data: data, requireAuth: requireAuth);
+  }
+
+  Future<dynamic> put(String path, {Map<String, dynamic>? data, bool requireAuth = true}) {
+    return request('PUT', path, data: data, requireAuth: requireAuth);
+  }
+
+  Future<dynamic> delete(String path, {bool requireAuth = true}) {
+    return request('DELETE', path, requireAuth: requireAuth);
+  }
+
+  Future<dynamic> patch(String path, {Map<String, dynamic>? data, bool requireAuth = true}) {
+    return request('PATCH', path, data: data, requireAuth: requireAuth);
+  }
 }
 
-// Исключения остаются без изменений
+// Исключения
 class ApiException implements Exception {
   final String message;
   ApiException(this.message);
@@ -306,7 +261,7 @@ class ValidationException extends ApiException {
       final data = jsonDecode(response.body);
       return ValidationException(
         data['errors'] ?? {},
-        'Ошибка валидации данных',
+        data['message'] ?? 'Ошибка валидации данных',
       );
     } catch (e) {
       return ValidationException({}, 'Ошибка валидации данных');

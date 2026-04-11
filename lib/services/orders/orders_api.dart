@@ -108,7 +108,7 @@ class OrdersApi {
     ApiLogger.logRequest(method, url, body: body);
 
     try {
-      await _client.put(url, body: body);
+      await _client.put(url, data: body);
       ApiLogger.logResponse(200, {'message': 'Order status changed'});
     } catch (e) {
       ApiLogger.logError(e);

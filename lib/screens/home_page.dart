@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:goodjob/screens/login_page.dart';
+import 'package:goodjob/screens/offer_page.dart';
 import 'package:goodjob/screens/registration_page.dart';
 import 'package:provider/provider.dart';
 import '../localization/app_localizations.dart';
@@ -42,6 +43,46 @@ class _MyHomePageState extends State<MyHomePage>
 
     _animationController.forward();
   }
+
+  Widget _buildTermsAndConditions(AppLocalizations? appLocalizations) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8F9FA),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE8E8E8)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.description_outlined,
+          size: 18,
+          color: Colors.grey.shade600,
+        ),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const OfferPage()),
+            );
+          },
+          child: Text(
+            appLocalizations?.translate('public_offer') ?? 'публичной офертой',
+            style: const TextStyle(
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0F7EDE),
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   void dispose() {
@@ -189,6 +230,8 @@ class _MyHomePageState extends State<MyHomePage>
                             text: appLocalizations.translate('register'),
                             isOutlined: true,
                           ),
+                               const SizedBox(height: 16),
+                          _buildTermsAndConditions(appLocalizations),
                         ],
                       ),
                     ),

@@ -8,6 +8,7 @@ import 'package:goodjob/models/master_review.dart';
 import 'package:goodjob/screens/edit_portfolio_master_page.dart';
 import 'package:goodjob/screens/edit_profile_page.dart';
 import 'package:goodjob/screens/help_page.dart';
+import 'package:goodjob/screens/offer_page.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -28,7 +29,8 @@ class AccountPage extends StatefulWidget {
   State<AccountPage> createState() => _AccountPageState();
 }
 
-class _AccountPageState extends State<AccountPage> with SingleTickerProviderStateMixin {
+class _AccountPageState extends State<AccountPage>
+    with SingleTickerProviderStateMixin {
   Map<String, dynamic>? userData;
   bool isLoading = true;
   bool isLoadingWorks = false;
@@ -89,7 +91,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${appLocalizations?.translate('failed_to_open_link') ?? 'Не удалось открыть ссылку'}: $url'),
+            content: Text(
+              '${appLocalizations?.translate('failed_to_open_link') ?? 'Не удалось открыть ссылку'}: $url',
+            ),
           ),
         );
       }
@@ -100,7 +104,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     final appLocalizations = AppLocalizations.of(context);
     if (username == null || username.isEmpty) {
       _showSnackBar(
-        appLocalizations?.translate('username_not_specified') ?? 'Имя пользователя не указано',
+        appLocalizations?.translate('username_not_specified') ??
+            'Имя пользователя не указано',
         isError: true,
       );
       return;
@@ -124,7 +129,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
       _launchUrl(url);
     } catch (e) {
       _showSnackBar(
-        appLocalizations?.translate('error_opening_link') ?? 'Ошибка при открытии ссылки',
+        appLocalizations?.translate('error_opening_link') ??
+            'Ошибка при открытии ссылки',
         isError: true,
       );
     }
@@ -134,7 +140,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? const Color(0xFFE53935) : const Color(0xFF0F7EDE),
+        backgroundColor: isError
+            ? const Color(0xFFE53935)
+            : const Color(0xFF0F7EDE),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 2),
@@ -219,7 +227,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
           _totalReviews = _reviews.length;
 
           if (_reviews.isNotEmpty) {
-            final sum = _reviews.fold(0, (prev, review) => prev + review.rating);
+            final sum = _reviews.fold(
+              0,
+              (prev, review) => prev + review.rating,
+            );
             _averageRating = sum / _reviews.length;
           } else {
             _averageRating = 0.0;
@@ -247,7 +258,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
 
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => EditProfilePage(initialMode: mode)),
+      MaterialPageRoute(
+        builder: (context) => EditProfilePage(initialMode: mode),
+      ),
     ).then((result) {
       if (mounted) {
         _loadUserProfile();
@@ -268,6 +281,46 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
   String _formatDate(String dateString) {
     return ApiService.formatDateTime(dateString);
   }
+
+Widget _buildTermsAndConditions(AppLocalizations? appLocalizations) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8F9FA),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE8E8E8)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.description_outlined,
+          size: 18,
+          color: Colors.grey.shade600,
+        ),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const OfferPage()),
+            );
+          },
+          child: Text(
+            appLocalizations?.translate('public_offer') ?? 'публичной офертой',
+            style: const TextStyle(
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0F7EDE),
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +354,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
             IconButton(
               onPressed: () async {
                 await AuthService.clearAuthData();
-                if (mounted) Navigator.pushReplacementNamed(context, '/registration');
+                if (mounted)
+                  Navigator.pushReplacementNamed(context, '/registration');
               },
               icon: Image.asset('assets/logout.png', width: 22, height: 22),
             ),
@@ -311,7 +365,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
           opacity: _fadeAnimation,
           child: isLoading
               ? _buildLoadingState(appLocalizations)
-              : (_isMaster ? _buildMasterContent(appLocalizations) : _buildClientContent(appLocalizations)),
+              : (_isMaster
+                    ? _buildMasterContent(appLocalizations)
+                    : _buildClientContent(appLocalizations)),
         ),
         bottomNavigationBar: _accountTypeForNavBar == null
             ? null
@@ -340,7 +396,11 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildLanguageButton(BuildContext context, LanguageProvider languageProvider, AppLocalizations? appLocalizations) {
+  Widget _buildLanguageButton(
+    BuildContext context,
+    LanguageProvider languageProvider,
+    AppLocalizations? appLocalizations,
+  ) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
@@ -350,20 +410,42 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildLanguageOption('RU', const Locale('ru'), languageProvider.locale.languageCode == 'ru', languageProvider, context),
-          _buildLanguageOption('KZ', const Locale('kk'), languageProvider.locale.languageCode == 'kk', languageProvider, context),
+          _buildLanguageOption(
+            'RU',
+            const Locale('ru'),
+            languageProvider.locale.languageCode == 'ru',
+            languageProvider,
+            context,
+          ),
+          _buildLanguageOption(
+            'KZ',
+            const Locale('kk'),
+            languageProvider.locale.languageCode == 'kk',
+            languageProvider,
+            context,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLanguageOption(String code, Locale locale, bool isActive, LanguageProvider provider, BuildContext context) {
+  Widget _buildLanguageOption(
+    String code,
+    Locale locale,
+    bool isActive,
+    LanguageProvider provider,
+    BuildContext context,
+  ) {
     return GestureDetector(
       onTap: () {
         provider.setLanguage(locale);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(locale.languageCode == 'ru' ? 'Язык изменен на русский' : 'Тіл қазақшаға өзгертілді'),
+            content: Text(
+              locale.languageCode == 'ru'
+                  ? 'Язык изменен на русский'
+                  : 'Тіл қазақшаға өзгертілді',
+            ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 1),
             behavior: SnackBarBehavior.floating,
@@ -398,7 +480,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
           ),
           const SizedBox(height: 16),
           Text(
-            appLocalizations?.translate('loading_profile') ?? 'Загрузка профиля...',
+            appLocalizations?.translate('loading_profile') ??
+                'Загрузка профиля...',
             style: const TextStyle(
               fontSize: 16,
               color: Color(0xFF5F6368),
@@ -410,178 +493,209 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildClientContent(AppLocalizations? appLocalizations) {
-    final String lastName = userData?['lastname'] ?? appLocalizations?.translate('not_specified') ?? 'Не указано';
-    final String firstName = userData?['firstname'] ?? '';
-    final String patronymic = userData?['patronymic'] ?? '';
-    final String phone = userData?['telephone'] ?? appLocalizations?.translate('not_specified') ?? 'Не указан';
+Widget _buildClientContent(AppLocalizations? appLocalizations) {
+  final String lastName =
+      userData?['lastname'] ??
+      appLocalizations?.translate('not_specified') ??
+      'Не указано';
+  final String firstName = userData?['firstname'] ?? '';
+  final String patronymic = userData?['patronymic'] ?? '';
+  final String phone =
+      userData?['telephone'] ??
+      appLocalizations?.translate('not_specified') ??
+      'Не указан';
 
-    return RefreshIndicator(
-      onRefresh: _loadUserProfile,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Column(
-                  children: [
-                    _buildAvatar(isMaster: _isMaster, appLocalizations: appLocalizations),
-                    const SizedBox(height: 16),
+  return RefreshIndicator(
+    onRefresh: _loadUserProfile,
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Column(
+                children: [
+                  _buildAvatar(
+                    isMaster: _isMaster,
+                    appLocalizations: appLocalizations,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    lastName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1D2125),
+                      fontFamily: 'Plus Jakarta Sans',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (firstName.isNotEmpty || patronymic.isNotEmpty)
                     Text(
-                      lastName,
+                      '$firstName $patronymic'.trim(),
                       style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1D2125),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF41454A),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (firstName.isNotEmpty || patronymic.isNotEmpty)
-                      Text(
-                        '$firstName $patronymic'.trim(),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F4FF),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        phone,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF0F7EDE),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F4FF),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      phone,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0F7EDE),
+                        fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            _buildMenuButton(
+              icon: 'assets/list.png',
+              title: appLocalizations?.translate('my_orders') ?? 'Мои заказы',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MyOrdersClientPage(),
                 ),
               ),
-              const SizedBox(height: 30),
-              _buildMenuButton(
-                icon: 'assets/list.png',
-                title: appLocalizations?.translate('my_orders') ?? 'Мои заказы',
-                onTap: () => Navigator.push(
+            ),
+            const SizedBox(height: 12),
+            _buildMenuButton(
+              icon: 'assets/help.png',
+              title: appLocalizations?.translate('help') ?? 'Помощь',
+              onTap: () {
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const MyOrdersClientPage()),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildMenuButton(
-                icon: 'assets/help.png',
-                title: appLocalizations?.translate('help') ?? 'Помощь',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const HelpPage()),
-                  );
-                },
-              ),
-              const SizedBox(height: 80),
-            ],
-          ),
+                  MaterialPageRoute(builder: (context) => const HelpPage()),
+                );
+              },
+            ),
+            const SizedBox(height: 30),
+            _buildTermsAndConditions(appLocalizations),
+            const SizedBox(height: 80),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+Widget _buildMasterContent(AppLocalizations? appLocalizations) {
+  final String lastName =
+      userData?['lastname'] ??
+      appLocalizations?.translate('not_specified') ??
+      'Не указано';
+  final String firstName = userData?['firstname'] ?? '';
+  final String patronymic = userData?['patronymic'] ?? '';
+  final String phone =
+      userData?['telephone'] ??
+      appLocalizations?.translate('not_specified') ??
+      'Не указан';
 
-  Widget _buildMasterContent(AppLocalizations? appLocalizations) {
-    final String lastName = userData?['lastname'] ?? appLocalizations?.translate('not_specified') ?? 'Не указано';
-    final String firstName = userData?['firstname'] ?? '';
-    final String patronymic = userData?['patronymic'] ?? '';
-    final String phone = userData?['telephone'] ?? appLocalizations?.translate('not_specified') ?? 'Не указан';
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        await _loadUserProfile();
-        await _loadMasterWorks();
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Column(
-                  children: [
-                    _buildAvatar(isMaster: _isMaster, appLocalizations: appLocalizations),
-                    const SizedBox(height: 16),
-                    Text(
-                      lastName,
+  return RefreshIndicator(
+    onRefresh: () async {
+      await _loadUserProfile();
+      await _loadMasterWorks();
+    },
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Column(
+                children: [
+                  _buildAvatar(
+                    isMaster: _isMaster,
+                    appLocalizations: appLocalizations,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    lastName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1D2125),
+                      fontFamily: 'Plus Jakarta Sans',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$firstName $patronymic'.trim(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF5F6368),
+                      fontFamily: 'Plus Jakarta Sans',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F4FF),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      phone,
                       style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1D2125),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0F7EDE),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$firstName $patronymic'.trim(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF5F6368),
-                        fontFamily: 'Plus Jakarta Sans',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F4FF),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        phone,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF0F7EDE),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              _buildCategorySelector(appLocalizations),
-              const SizedBox(height: 20),
-              _buildSocialLinks(appLocalizations),
-              const SizedBox(height: 20),
-              _buildSubscriptionBlock(appLocalizations),
-              const SizedBox(height: 24),
-              _buildReviewsStats(appLocalizations),
-              const SizedBox(height: 20),
-              _buildReviewsList(appLocalizations),
-              const SizedBox(height: 24),
-              _buildMyWorksSection(appLocalizations),
-              const SizedBox(height: 80),
-            ],
-          ),
+            ),
+            const SizedBox(height: 24),
+            _buildCategorySelector(appLocalizations),
+            const SizedBox(height: 20),
+            _buildSocialLinks(appLocalizations),
+            const SizedBox(height: 20),
+            _buildSubscriptionBlock(appLocalizations),
+            const SizedBox(height: 24),
+            _buildReviewsStats(appLocalizations),
+            const SizedBox(height: 20),
+            _buildReviewsList(appLocalizations),
+            const SizedBox(height: 24),
+            _buildMyWorksSection(appLocalizations),
+            const SizedBox(height: 30),
+            _buildTermsAndConditions(appLocalizations),
+            const SizedBox(height: 80),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildAvatar({required bool isMaster, required AppLocalizations? appLocalizations}) {
+    ),
+  );
+}
+  Widget _buildAvatar({
+    required bool isMaster,
+    required AppLocalizations? appLocalizations,
+  }) {
     String? avatarUrl = userData?['avatar'];
     String displayLetter = userData?['firstname']?.isNotEmpty == true
         ? userData!['firstname'][0].toUpperCase()
@@ -705,7 +819,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 onTap: _navigateToEditProfile,
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16,
+                    horizontal: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF5F9FF),
                     borderRadius: BorderRadius.circular(16),
@@ -734,7 +851,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              appLocalizations?.translate('add_categories') ?? 'Добавить категории',
+                              appLocalizations?.translate('add_categories') ??
+                                  'Добавить категории',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -744,7 +862,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              appLocalizations?.translate('select_service_categories') ?? 'Выберите категории услуг',
+                              appLocalizations?.translate(
+                                    'select_service_categories',
+                                  ) ??
+                                  'Выберите категории услуг',
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF8A8D90),
@@ -814,7 +935,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8F4FF),
                   borderRadius: BorderRadius.circular(20),
@@ -844,22 +968,30 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 const Color(0xFFFFEBEE),
                 const Color(0xFFE0F2F1),
               ];
-              final colorIndex = (category['name']?.hashCode ?? 0).abs() % colors.length;
+              final colorIndex =
+                  (category['name']?.hashCode ?? 0).abs() % colors.length;
               final bgColor = colors[colorIndex];
 
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: bgColor,
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(color: bgColor.withOpacity(0.5)),
                 ),
                 child: Text(
-                  category['name'] ?? appLocalizations?.translate('category') ?? 'Категория',
+                  category['name'] ??
+                      appLocalizations?.translate('category') ??
+                      'Категория',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: bgColor.computeLuminance() > 0.5 ? const Color(0xFF1D2125) : Colors.white,
+                    color: bgColor.computeLuminance() > 0.5
+                        ? const Color(0xFF1D2125)
+                        : Colors.white,
                     fontFamily: 'Plus Jakarta Sans',
                   ),
                 ),
@@ -873,7 +1005,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
               onTap: _navigateToEditProfile,
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(color: const Color(0xFFE8E8E8)),
                   borderRadius: BorderRadius.circular(16),
@@ -881,10 +1016,15 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF0F7EDE)),
+                    const Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: Color(0xFF0F7EDE),
+                    ),
                     const SizedBox(width: 8),
                     Text(
-                      appLocalizations?.translate('edit_categories') ?? 'Редактировать категории',
+                      appLocalizations?.translate('edit_categories') ??
+                          'Редактировать категории',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -903,8 +1043,12 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
   }
 
   Widget _buildSocialLinks(AppLocalizations? appLocalizations) {
-    final hasTikTok = userData?['ttUsername'] != null && userData!['ttUsername'].toString().isNotEmpty;
-    final hasInstagram = userData?['instUsername'] != null && userData!['instUsername'].toString().isNotEmpty;
+    final hasTikTok =
+        userData?['ttUsername'] != null &&
+        userData!['ttUsername'].toString().isNotEmpty;
+    final hasInstagram =
+        userData?['instUsername'] != null &&
+        userData!['instUsername'].toString().isNotEmpty;
 
     if (!hasTikTok && !hasInstagram) {
       return Container(
@@ -941,7 +1085,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 onTap: _navigateToEditProfile,
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16,
+                    horizontal: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF5F9FF),
                     borderRadius: BorderRadius.circular(16),
@@ -970,7 +1117,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              appLocalizations?.translate('add_social_media') ?? 'Добавить соцсети',
+                              appLocalizations?.translate('add_social_media') ??
+                                  'Добавить соцсети',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -980,7 +1128,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              appLocalizations?.translate('instagram_and_tiktok') ?? 'Instagram и TikTok',
+                              appLocalizations?.translate(
+                                    'instagram_and_tiktok',
+                                  ) ??
+                                  'Instagram и TikTok',
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF8A8D90),
@@ -1087,7 +1238,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: hasUsername ? () => _openSocialLink(username, platform) : _navigateToEditProfile,
+        onTap: hasUsername
+            ? () => _openSocialLink(username, platform)
+            : _navigateToEditProfile,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -1095,7 +1248,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
             color: hasUsername ? Colors.white : const Color(0xFFF5F5F5),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: hasUsername ? color.withOpacity(0.3) : const Color(0xFFE8E8E8),
+              color: hasUsername
+                  ? color.withOpacity(0.3)
+                  : const Color(0xFFE8E8E8),
             ),
           ),
           child: Column(
@@ -1107,7 +1262,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 color: hasUsername ? null : Colors.grey,
                 errorBuilder: (context, error, stackTrace) {
                   return Icon(
-                    platform == 'tiktok' ? Icons.music_note : Icons.alternate_email,
+                    platform == 'tiktok'
+                        ? Icons.music_note
+                        : Icons.alternate_email,
                     color: hasUsername ? color : Colors.grey,
                     size: 32,
                   );
@@ -1117,11 +1274,14 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
               Text(
                 hasUsername
                     ? '@${username.length > 10 ? '${username.substring(0, 10)}...' : username}'
-                    : appLocalizations?.translate('not_specified') ?? 'Не указан',
+                    : appLocalizations?.translate('not_specified') ??
+                          'Не указан',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: hasUsername ? FontWeight.w500 : FontWeight.w400,
-                  color: hasUsername ? const Color(0xFF41454A) : const Color(0xFF9AA0A6),
+                  color: hasUsername
+                      ? const Color(0xFF41454A)
+                      : const Color(0xFF9AA0A6),
                   fontFamily: 'Plus Jakarta Sans',
                 ),
                 textAlign: TextAlign.center,
@@ -1130,7 +1290,11 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
               ),
               if (hasUsername) ...[
                 const SizedBox(height: 4),
-                const Icon(Icons.open_in_new, size: 14, color: Color(0xFF0F7EDE)),
+                const Icon(
+                  Icons.open_in_new,
+                  size: 14,
+                  color: Color(0xFF0F7EDE),
+                ),
               ],
             ],
           ),
@@ -1145,7 +1309,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
 
     if (!hasSubscription) {
       return GestureDetector(
-        onTap: () => _launchUrl('https://qr.kaspi.kz/19134627698424934147714893150004931409130'),
+        onTap: () => _launchUrl(
+          'https://qr.kaspi.kz/19134627698424934147714893150004931409130',
+        ),
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -1166,12 +1332,16 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        appLocalizations?.translate('premium_subscription') ?? 'Премиум\nподписка',
+                        appLocalizations?.translate('premium_subscription') ??
+                            'Премиум\nподписка',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -1219,9 +1389,12 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     if (endAt != null) {
       try {
         final dateTime = DateTime.parse(endAt);
-        formattedDate = '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}.${dateTime.year}';
+        formattedDate =
+            '${dateTime.day.toString().padLeft(2, '0')}.${dateTime.month.toString().padLeft(2, '0')}.${dateTime.year}';
       } catch (e) {
-        formattedDate = appLocalizations?.translate('date_not_specified') ?? 'Дата не указана';
+        formattedDate =
+            appLocalizations?.translate('date_not_specified') ??
+            'Дата не указана';
       }
     }
 
@@ -1253,7 +1426,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  appLocalizations?.translate('subscription_active') ?? 'Подписка активна',
+                  appLocalizations?.translate('subscription_active') ??
+                      'Подписка активна',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -1346,7 +1520,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF9E7),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.amber.withOpacity(0.3), width: 2),
+                  border: Border.all(
+                    color: Colors.amber.withOpacity(0.3),
+                    width: 2,
+                  ),
                 ),
                 child: Center(
                   child: Column(
@@ -1375,11 +1552,31 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
               Expanded(
                 child: Column(
                   children: [
-                    _buildRatingBar(5, _getRatingPercentage(5), appLocalizations),
-                    _buildRatingBar(4, _getRatingPercentage(4), appLocalizations),
-                    _buildRatingBar(3, _getRatingPercentage(3), appLocalizations),
-                    _buildRatingBar(2, _getRatingPercentage(2), appLocalizations),
-                    _buildRatingBar(1, _getRatingPercentage(1), appLocalizations),
+                    _buildRatingBar(
+                      5,
+                      _getRatingPercentage(5),
+                      appLocalizations,
+                    ),
+                    _buildRatingBar(
+                      4,
+                      _getRatingPercentage(4),
+                      appLocalizations,
+                    ),
+                    _buildRatingBar(
+                      3,
+                      _getRatingPercentage(3),
+                      appLocalizations,
+                    ),
+                    _buildRatingBar(
+                      2,
+                      _getRatingPercentage(2),
+                      appLocalizations,
+                    ),
+                    _buildRatingBar(
+                      1,
+                      _getRatingPercentage(1),
+                      appLocalizations,
+                    ),
                   ],
                 ),
               ),
@@ -1396,7 +1593,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  appLocalizations?.translate('total_reviews') ?? 'Всего отзывов:',
+                  appLocalizations?.translate('total_reviews') ??
+                      'Всего отзывов:',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF5F6368),
@@ -1420,7 +1618,11 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildRatingBar(int stars, double percentage, AppLocalizations? appLocalizations) {
+  Widget _buildRatingBar(
+    int stars,
+    double percentage,
+    AppLocalizations? appLocalizations,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -1453,10 +1655,7 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
             width: 35,
             child: Text(
               '${(percentage * 100).toInt()}%',
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF8A8D90),
-              ),
+              style: const TextStyle(fontSize: 11, color: Color(0xFF8A8D90)),
             ),
           ),
         ],
@@ -1496,7 +1695,8 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
             Icon(Icons.rate_review_outlined, size: 64, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
-              appLocalizations?.translate('no_reviews_yet') ?? 'Пока нет отзывов',
+              appLocalizations?.translate('no_reviews_yet') ??
+                  'Пока нет отзывов',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -1580,7 +1780,10 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF5F5F5),
                       borderRadius: BorderRadius.circular(12),
@@ -1675,10 +1878,15 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 ? Center(
                     child: Column(
                       children: [
-                        Icon(Icons.photo_library, size: 60, color: Colors.grey[300]),
+                        Icon(
+                          Icons.photo_library,
+                          size: 60,
+                          color: Colors.grey[300],
+                        ),
                         const SizedBox(height: 12),
                         Text(
-                          appLocalizations?.translate('no_works_uploaded') ?? 'Нет загруженных работ',
+                          appLocalizations?.translate('no_works_uploaded') ??
+                              'Нет загруженных работ',
                           style: const TextStyle(
                             color: Color(0xFF8A8D90),
                             fontSize: 16,
@@ -1692,13 +1900,17 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                             onTap: _openEditPortfolioPage,
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF0F7EDE),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                appLocalizations?.translate('add_work') ?? 'Добавить работу',
+                                appLocalizations?.translate('add_work') ??
+                                    'Добавить работу',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -1715,21 +1927,34 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                 : GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      mainAxisSpacing: 4,
-                      crossAxisSpacing: 4,
-                      childAspectRatio: 1,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 4,
+                          crossAxisSpacing: 4,
+                          childAspectRatio: 1,
+                        ),
                     itemCount: portfolioImages.length + 1,
                     itemBuilder: (context, index) {
                       const double r = 12;
                       BorderRadius radius = BorderRadius.zero;
 
-                      if (index == 0) radius = const BorderRadius.only(topLeft: Radius.circular(r));
-                      else if (index == 2) radius = const BorderRadius.only(topRight: Radius.circular(r));
-                      else if (index == 6) radius = const BorderRadius.only(bottomLeft: Radius.circular(r));
-                      else if (index == 8) radius = const BorderRadius.only(bottomRight: Radius.circular(r));
+                      if (index == 0)
+                        radius = const BorderRadius.only(
+                          topLeft: Radius.circular(r),
+                        );
+                      else if (index == 2)
+                        radius = const BorderRadius.only(
+                          topRight: Radius.circular(r),
+                        );
+                      else if (index == 6)
+                        radius = const BorderRadius.only(
+                          bottomLeft: Radius.circular(r),
+                        );
+                      else if (index == 8)
+                        radius = const BorderRadius.only(
+                          bottomRight: Radius.circular(r),
+                        );
 
                       if (index == portfolioImages.length) {
                         return Material(
@@ -1741,12 +1966,19 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF5F5F5),
                                 borderRadius: radius,
-                                border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+                                border: Border.all(
+                                  color: const Color(0xFFE0E0E0),
+                                  width: 1,
+                                ),
                               ),
                               child: const Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add, size: 32, color: Color(0xFF0F7EDE)),
+                                  Icon(
+                                    Icons.add,
+                                    size: 32,
+                                    color: Color(0xFF0F7EDE),
+                                  ),
                                   SizedBox(height: 4),
                                   Text(
                                     'Добавить',
@@ -1774,7 +2006,9 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                               decoration: BoxDecoration(
                                 borderRadius: radius,
                                 image: DecorationImage(
-                                  image: NetworkImage('http://gj-back.checkedout.kz/storage/${workPhoto.path}'),
+                                  image: NetworkImage(
+                                    'http://gj-back.checkedout.kz/storage/${workPhoto.path}',
+                                  ),
                                   fit: BoxFit.cover,
                                 ),
                               ),
@@ -1783,7 +2017,12 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                         );
                       }
 
-                      return Container(decoration: BoxDecoration(color: Colors.grey[100], borderRadius: radius));
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: radius,
+                        ),
+                      );
                     },
                   ),
           ),
@@ -1820,14 +2059,22 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
           child: Row(
             children: [
               if (icon == 'assets/help.png')
-                const Icon(Icons.help_outline, color: Color(0xFF41454A), size: 24)
+                const Icon(
+                  Icons.help_outline,
+                  color: Color(0xFF41454A),
+                  size: 24,
+                )
               else
                 Image.asset(
                   icon,
                   width: 24,
                   height: 24,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.help_outline, color: Color(0xFF41454A), size: 24);
+                    return const Icon(
+                      Icons.help_outline,
+                      color: Color(0xFF41454A),
+                      size: 24,
+                    );
                   },
                 ),
               const SizedBox(width: 16),
@@ -1842,7 +2089,11 @@ class _AccountPageState extends State<AccountPage> with SingleTickerProviderStat
                   ),
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF9AA0A6)),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Color(0xFF9AA0A6),
+              ),
             ],
           ),
         ),

@@ -76,8 +76,8 @@ class ApiService {
     required String code,
   }) => _authApi.confirmPhone(telephone: telephone, code: code);
 
-  static Future<dynamic> refreshToken({required String token}) =>
-      _authApi.refreshToken(token: token);
+  static Future<dynamic> refreshToken({required String refreshToken}) =>
+      _authApi.refreshToken(refreshToken: refreshToken);
 
   static Future<String?> getDebugSmsCode(String telephone) =>
       _authApi.getDebugSmsCode(telephone);
