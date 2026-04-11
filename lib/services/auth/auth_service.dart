@@ -1,6 +1,6 @@
 // lib/services/auth/auth_service.dart
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:goodjob/services/api_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static const String _tokenKey = 'auth_token';
@@ -9,23 +9,38 @@ class AuthService {
   static const String _refreshTokenExpiryKey = 'refreshToken_expiry';
   static const String _userRoleKey = 'user_role';
   static const String _userIdKey = 'user_id';
+  
+  // Используем secure storage для токенов
+  static final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true, // Включаем шифрование на Android
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock,
+    ),
+  );
+  
+  // Для обычных данных (не токенов) можно оставить SharedPreferences
+  // Но для единообразия лучше все хранить в secure storage
 
   // Проверка авторизации с обновлением токена
   static Future<bool> isLoggedIn() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(_tokenKey);
-      final refreshToken = prefs.getString(_refreshTokenKey);
+      final token = await _secureStorage.read(key: _tokenKey);
+      final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
 
       if (token == null || token.isEmpty) return false;
       if (refreshToken == null || refreshToken.isEmpty) return false;
 
-      final expiry = prefs.getInt(_tokenExpiryKey);
-      if (expiry != null) {
-        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        if (now >= expiry) {
-          // Токен истек, пробуем обновить
-          return await refreshTokenPair();
+      final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
+      if (expiryStr != null) {
+        final expiry = int.tryParse(expiryStr);
+        if (expiry != null) {
+          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          if (now >= expiry) {
+            // Токен истек, пробуем обновить
+            return await refreshTokenPair();
+          }
         }
       }
 
@@ -39,8 +54,7 @@ class AuthService {
   // Обновление пары токенов (ротация)
   static Future<bool> refreshTokenPair() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final refreshToken = prefs.getString(_refreshTokenKey);
+      final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
 
       if (refreshToken == null || refreshToken.isEmpty) {
         return false;
@@ -81,8 +95,7 @@ class AuthService {
   // Сохранение access токена
   static Future<void> saveToken(String token) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, token);
+      await _secureStorage.write(key: _tokenKey, value: token);
     } catch (e) {
       print('Ошибка сохранения токена: $e');
     }
@@ -91,8 +104,7 @@ class AuthService {
   // Сохранение refresh токена
   static Future<void> saveRefreshToken(String refreshToken) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_refreshTokenKey, refreshToken);
+      await _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
     } catch (e) {
       print('Ошибка сохранения refresh токена: $e');
     }
@@ -101,9 +113,8 @@ class AuthService {
   // Сохранение времени жизни access токена
   static Future<void> saveTokenExpiry(int ttlSeconds) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await prefs.setInt(_tokenExpiryKey, now + ttlSeconds);
+      await _secureStorage.write(key: _tokenExpiryKey, value: (now + ttlSeconds).toString());
     } catch (e) {
       print('Ошибка сохранения expiry: $e');
     }
@@ -112,9 +123,8 @@ class AuthService {
   // Сохранение времени жизни refresh токена
   static Future<void> saveRefreshTokenExpiry(int ttlSeconds) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await prefs.setInt(_refreshTokenExpiryKey, now + ttlSeconds);
+      await _secureStorage.write(key: _refreshTokenExpiryKey, value: (now + ttlSeconds).toString());
     } catch (e) {
       print('Ошибка сохранения refresh expiry: $e');
     }
@@ -136,8 +146,7 @@ class AuthService {
   // Сохранение роли пользователя
   static Future<void> saveUserRole(String role) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_userRoleKey, role);
+      await _secureStorage.write(key: _userRoleKey, value: role);
     } catch (e) {
       print('Ошибка сохранения роли: $e');
     }
@@ -146,8 +155,7 @@ class AuthService {
   // Получение роли пользователя
   static Future<String?> getUserRole() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_userRoleKey);
+      return await _secureStorage.read(key: _userRoleKey);
     } catch (e) {
       print('Ошибка получения роли: $e');
       return null;
@@ -157,13 +165,12 @@ class AuthService {
   // Очистка всех данных авторизации
   static Future<void> clearAuthData() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_tokenKey);
-      await prefs.remove(_refreshTokenKey);
-      await prefs.remove(_tokenExpiryKey);
-      await prefs.remove(_refreshTokenExpiryKey);
-      await prefs.remove(_userRoleKey);
-      await prefs.remove(_userIdKey);
+      await _secureStorage.delete(key: _tokenKey);
+      await _secureStorage.delete(key: _refreshTokenKey);
+      await _secureStorage.delete(key: _tokenExpiryKey);
+      await _secureStorage.delete(key: _refreshTokenExpiryKey);
+      await _secureStorage.delete(key: _userRoleKey);
+      await _secureStorage.delete(key: _userIdKey);
       print('✅ Данные авторизации очищены');
     } catch (e) {
       print('Ошибка очистки данных: $e');
@@ -173,8 +180,7 @@ class AuthService {
   // Получение access токена
   static Future<String?> getToken() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_tokenKey);
+      return await _secureStorage.read(key: _tokenKey);
     } catch (e) {
       return null;
     }
@@ -183,8 +189,7 @@ class AuthService {
   // Получение refresh токена
   static Future<String?> getRefreshToken() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_refreshTokenKey);
+      return await _secureStorage.read(key: _refreshTokenKey);
     } catch (e) {
       return null;
     }
@@ -197,8 +202,7 @@ class AuthService {
       if (profile['data'] != null) {
         final userId = profile['data']['id']?.toString();
         if (userId != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_userIdKey, userId);
+          await _secureStorage.write(key: _userIdKey, value: userId);
         }
         return userId;
       }
@@ -212,8 +216,7 @@ class AuthService {
   // Получение сохраненного ID пользователя
   static Future<String?> getStoredUserId() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_userIdKey);
+      return await _secureStorage.read(key: _userIdKey);
     } catch (e) {
       return null;
     }
@@ -222,9 +225,10 @@ class AuthService {
   // Проверка валидности access токена
   static Future<bool> isTokenValid() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final expiry = prefs.getInt(_tokenExpiryKey);
+      final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
+      if (expiryStr == null) return false;
 
+      final expiry = int.tryParse(expiryStr);
       if (expiry == null) return false;
 
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -237,9 +241,10 @@ class AuthService {
   // Проверка валидности refresh токена
   static Future<bool> isRefreshTokenValid() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final expiry = prefs.getInt(_refreshTokenExpiryKey);
+      final expiryStr = await _secureStorage.read(key: _refreshTokenExpiryKey);
+      if (expiryStr == null) return false;
 
+      final expiry = int.tryParse(expiryStr);
       if (expiry == null) return false;
 
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -252,9 +257,10 @@ class AuthService {
   // Получение времени до истечения access токена (в секундах)
   static Future<int?> getTokenTimeToLive() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final expiry = prefs.getInt(_tokenExpiryKey);
+      final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
+      if (expiryStr == null) return null;
       
+      final expiry = int.tryParse(expiryStr);
       if (expiry == null) return null;
       
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;

@@ -4,7 +4,7 @@ import 'package:goodjob/screens/account_page.dart';
 import 'package:goodjob/screens/edit_profile_page.dart';
 import 'package:goodjob/screens/home_page.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'role_provider.dart';
 import 'services/api_service.dart';
@@ -139,11 +139,11 @@ class _AuthCheckerState extends State<AuthChecker> {
       final activeMode = profileResponse['data']['active_mode'] as String;
       await AuthService.saveUserRole(activeMode);
       
-      // Сохраняем ID пользователя
+      // Сохраняем ID пользователя в secure storage
       final userId = profileResponse['data']['id']?.toString();
       if (userId != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_id', userId);
+        const secureStorage = FlutterSecureStorage();
+        await secureStorage.write(key: 'user_id', value: userId);
       }
       
       return activeMode;
