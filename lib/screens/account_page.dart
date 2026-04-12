@@ -166,7 +166,8 @@ class _AccountPageState extends State<AccountPage>
       if (mounted) {
         setState(() {
           userData = response['data'];
-          final activeValue = userData?['activeMode'];
+          final activeValue =
+              userData?['activeMode'] ?? userData?['active_mode'];
           if (activeValue != null) {
             _activeMode = activeValue;
           }
@@ -282,116 +283,213 @@ class _AccountPageState extends State<AccountPage>
     return ApiService.formatDateTime(dateString);
   }
 
-Widget _buildTermsAndConditions(AppLocalizations? appLocalizations) {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF8F9FA),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE8E8E8)),
-    ),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.description_outlined,
-          size: 18,
-          color: Colors.grey.shade600,
-        ),
-        GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const OfferPage()),
-            );
-          },
-          child: Text(
-            appLocalizations?.translate('public_offer') ?? 'публичной офертой',
-            style: const TextStyle(
-              fontFamily: 'Plus Jakarta Sans',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0F7EDE),
-              decoration: TextDecoration.underline,
+  Widget _buildTermsAndConditions(AppLocalizations? appLocalizations) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8E8E8)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.description_outlined,
+            size: 18,
+            color: Colors.grey.shade600,
+          ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const OfferPage()),
+              );
+            },
+            child: Text(
+              appLocalizations?.translate('public_offer') ??
+                  'публичной офертой',
+              style: const TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0F7EDE),
+                decoration: TextDecoration.underline,
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _onWillPop() async {
+    // Проверяем, можем ли мы вернуться назад
+    if (Navigator.of(context).canPop()) {
+      return true; // Разрешаем стандартное возвращение
+    } else {
+      // Показываем диалог выхода
+      final shouldExit = await _showExitDialog(context);
+      if (shouldExit) {
+        await AuthService.clearAuthData();
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/registration');
+        }
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _showExitDialog(BuildContext context) async {
+    final appLocalizations = AppLocalizations.of(context);
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          appLocalizations?.translate('exit_app') ?? 'Выход',
+          style: const TextStyle(fontFamily: 'Plus Jakarta Sans'),
         ),
-      ],
-    ),
-  );
-}
+        content: Text(
+          appLocalizations?.translate('exit_app_message') ?? 
+          'Вы уверены, что хотите выйти?',
+          style: const TextStyle(fontFamily: 'Plus Jakarta Sans'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              appLocalizations?.translate('cancel') ?? 'Отмена',
+              style: const TextStyle(color: Color(0xFF5F6368)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              appLocalizations?.translate('exit') ?? 'Выйти',
+              style: const TextStyle(color: Color(0xFFE53935)),
+            ),
+          ),
+        ],
+      ),
+    );
+    return shouldExit ?? false;
+  }
+
+  Future<bool> _showLogoutDialog(BuildContext context) async {
+    final appLocalizations = AppLocalizations.of(context);
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          appLocalizations?.translate('logout') ?? 'Выход из аккаунта',
+          style: const TextStyle(fontFamily: 'Plus Jakarta Sans'),
+        ),
+        content: Text(
+          appLocalizations?.translate('logout_confirmation') ?? 
+          'Вы уверены, что хотите выйти из аккаунта?',
+          style: const TextStyle(fontFamily: 'Plus Jakarta Sans'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              appLocalizations?.translate('cancel') ?? 'Отмена',
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              appLocalizations?.translate('logout') ?? 'Выйти',
+              style: const TextStyle(color: Color(0xFFE53935)),
+            ),
+          ),
+        ],
+      ),
+    );
+    return shouldLogout ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final appLocalizations = AppLocalizations.of(context);
     final languageProvider = Provider.of<LanguageProvider>(context);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Color(0xFFFAFAFA),
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFAFAFA),
-        resizeToAvoidBottomInset: false,
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: const Color(0xFFFAFAFA),
-          centerTitle: true,
-          title: Text(
-            appLocalizations?.translate('account') ?? 'Аккаунт',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1D2125),
-              fontFamily: 'Plus Jakarta Sans',
-            ),
-          ),
-          actions: [
-            _buildLanguageButton(context, languageProvider, appLocalizations),
-            IconButton(
-              onPressed: () async {
-                await AuthService.clearAuthData();
-                if (mounted)
-                  Navigator.pushReplacementNamed(context, '/registration');
-              },
-              icon: Image.asset('assets/logout.png', width: 22, height: 22),
-            ),
-          ],
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          systemNavigationBarColor: Color(0xFFFAFAFA),
+          systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        body: FadeTransition(
-          opacity: _fadeAnimation,
-          child: isLoading
-              ? _buildLoadingState(appLocalizations)
-              : (_isMaster
+        child: Scaffold(
+          backgroundColor: const Color(0xFFFAFAFA),
+          resizeToAvoidBottomInset: false,
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: const Color(0xFFFAFAFA),
+            centerTitle: true,
+            title: Text(
+              appLocalizations?.translate('account') ?? 'Аккаунт',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1D2125),
+                fontFamily: 'Plus Jakarta Sans',
+              ),
+            ),
+            actions: [
+              _buildLanguageButton(context, languageProvider, appLocalizations),
+              IconButton(
+                onPressed: () async {
+                  final shouldLogout = await _showLogoutDialog(context);
+                  if (shouldLogout && mounted) {
+                    await AuthService.clearAuthData();
+                    if (mounted) {
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/registration',
+                        (route) => false,
+                      );
+                    }
+                  }
+                },
+                icon: Image.asset('assets/logout.png', width: 22, height: 22),
+              ),
+            ],
+          ),
+          body: FadeTransition(
+            opacity: _fadeAnimation,
+            child: isLoading
+                ? _buildLoadingState(appLocalizations)
+                : (_isMaster
                     ? _buildMasterContent(appLocalizations)
                     : _buildClientContent(appLocalizations)),
-        ),
-        bottomNavigationBar: _accountTypeForNavBar == null
-            ? null
-            : SafeArea(
-                top: false,
-                minimum: const EdgeInsets.only(bottom: 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFAFAFA),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 12,
-                        offset: const Offset(0, -4),
-                        spreadRadius: -2,
-                      ),
-                    ],
-                  ),
-                  child: CustomBottomNavBar(
-                    activeItem: NavItem.account,
-                    accountType: _accountTypeForNavBar!,
+          ),
+          bottomNavigationBar: _accountTypeForNavBar == null
+              ? null
+              : SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.only(bottom: 0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFAFA),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 12,
+                          offset: const Offset(0, -4),
+                          spreadRadius: -2,
+                        ),
+                      ],
+                    ),
+                    child: CustomBottomNavBar(
+                      activeItem: NavItem.account,
+                      accountType: _accountTypeForNavBar!,
+                    ),
                   ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -493,205 +591,207 @@ Widget _buildTermsAndConditions(AppLocalizations? appLocalizations) {
     );
   }
 
-Widget _buildClientContent(AppLocalizations? appLocalizations) {
-  final String lastName =
-      userData?['lastname'] ??
-      appLocalizations?.translate('not_specified') ??
-      'Не указано';
-  final String firstName = userData?['firstname'] ?? '';
-  final String patronymic = userData?['patronymic'] ?? '';
-  final String phone =
-      userData?['telephone'] ??
-      appLocalizations?.translate('not_specified') ??
-      'Не указан';
+  Widget _buildClientContent(AppLocalizations? appLocalizations) {
+    final String lastName =
+        userData?['lastname'] ??
+        appLocalizations?.translate('not_specified') ??
+        'Не указано';
+    final String firstName = userData?['firstname'] ?? '';
+    final String patronymic = userData?['patronymic'] ?? '';
+    final String phone =
+        userData?['telephone'] ??
+        appLocalizations?.translate('not_specified') ??
+        'Не указан';
 
-  return RefreshIndicator(
-    onRefresh: _loadUserProfile,
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Column(
-                children: [
-                  _buildAvatar(
-                    isMaster: _isMaster,
-                    appLocalizations: appLocalizations,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    lastName,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1D2125),
-                      fontFamily: 'Plus Jakarta Sans',
+    return RefreshIndicator(
+      onRefresh: _loadUserProfile,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Column(
+                  children: [
+                    _buildAvatar(
+                      isMaster: _isMaster,
+                      appLocalizations: appLocalizations,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (firstName.isNotEmpty || patronymic.isNotEmpty)
+                    const SizedBox(height: 16),
                     Text(
-                      '$firstName $patronymic'.trim(),
+                      lastName,
                       style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF41454A),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                       textAlign: TextAlign.center,
                     ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F4FF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      phone,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF0F7EDE),
-                        fontFamily: 'Plus Jakarta Sans',
+                    if (firstName.isNotEmpty || patronymic.isNotEmpty)
+                      Text(
+                        '$firstName $patronymic'.trim(),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF41454A),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F4FF),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        phone,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF0F7EDE),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 30),
-            _buildMenuButton(
-              icon: 'assets/list.png',
-              title: appLocalizations?.translate('my_orders') ?? 'Мои заказы',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const MyOrdersClientPage(),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            _buildMenuButton(
-              icon: 'assets/help.png',
-              title: appLocalizations?.translate('help') ?? 'Помощь',
-              onTap: () {
-                Navigator.push(
+              const SizedBox(height: 30),
+              _buildMenuButton(
+                icon: 'assets/list.png',
+                title: appLocalizations?.translate('my_orders') ?? 'Мои заказы',
+                onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const HelpPage()),
-                );
-              },
-            ),
-            const SizedBox(height: 30),
-            _buildTermsAndConditions(appLocalizations),
-            const SizedBox(height: 80),
-          ],
+                  MaterialPageRoute(
+                    builder: (context) => const MyOrdersClientPage(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildMenuButton(
+                icon: 'assets/help.png',
+                title: appLocalizations?.translate('help') ?? 'Помощь',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HelpPage()),
+                  );
+                },
+              ),
+              const SizedBox(height: 30),
+              _buildTermsAndConditions(appLocalizations),
+              const SizedBox(height: 80),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
-Widget _buildMasterContent(AppLocalizations? appLocalizations) {
-  final String lastName =
-      userData?['lastname'] ??
-      appLocalizations?.translate('not_specified') ??
-      'Не указано';
-  final String firstName = userData?['firstname'] ?? '';
-  final String patronymic = userData?['patronymic'] ?? '';
-  final String phone =
-      userData?['telephone'] ??
-      appLocalizations?.translate('not_specified') ??
-      'Не указан';
+    );
+  }
 
-  return RefreshIndicator(
-    onRefresh: () async {
-      await _loadUserProfile();
-      await _loadMasterWorks();
-    },
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Column(
-                children: [
-                  _buildAvatar(
-                    isMaster: _isMaster,
-                    appLocalizations: appLocalizations,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    lastName,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1D2125),
-                      fontFamily: 'Plus Jakarta Sans',
+  Widget _buildMasterContent(AppLocalizations? appLocalizations) {
+    final String lastName =
+        userData?['lastname'] ??
+        appLocalizations?.translate('not_specified') ??
+        'Не указано';
+    final String firstName = userData?['firstname'] ?? '';
+    final String patronymic = userData?['patronymic'] ?? '';
+    final String phone =
+        userData?['telephone'] ??
+        appLocalizations?.translate('not_specified') ??
+        'Не указан';
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadUserProfile();
+        await _loadMasterWorks();
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Column(
+                  children: [
+                    _buildAvatar(
+                      isMaster: _isMaster,
+                      appLocalizations: appLocalizations,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$firstName $patronymic'.trim(),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF5F6368),
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F4FF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      phone,
+                    const SizedBox(height: 16),
+                    Text(
+                      lastName,
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF0F7EDE),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2125),
                         fontFamily: 'Plus Jakarta Sans',
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '$firstName $patronymic'.trim(),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF5F6368),
+                        fontFamily: 'Plus Jakarta Sans',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F4FF),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        phone,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF0F7EDE),
+                          fontFamily: 'Plus Jakarta Sans',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _buildCategorySelector(appLocalizations),
-            const SizedBox(height: 20),
-            _buildSocialLinks(appLocalizations),
-            const SizedBox(height: 20),
-            _buildSubscriptionBlock(appLocalizations),
-            const SizedBox(height: 24),
-            _buildReviewsStats(appLocalizations),
-            const SizedBox(height: 20),
-            _buildReviewsList(appLocalizations),
-            const SizedBox(height: 24),
-            _buildMyWorksSection(appLocalizations),
-            const SizedBox(height: 30),
-            _buildTermsAndConditions(appLocalizations),
-            const SizedBox(height: 80),
-          ],
+              const SizedBox(height: 24),
+              _buildCategorySelector(appLocalizations),
+              const SizedBox(height: 20),
+              _buildSocialLinks(appLocalizations),
+              const SizedBox(height: 20),
+              _buildSubscriptionBlock(appLocalizations),
+              const SizedBox(height: 24),
+              _buildReviewsStats(appLocalizations),
+              const SizedBox(height: 20),
+              _buildReviewsList(appLocalizations),
+              const SizedBox(height: 24),
+              _buildMyWorksSection(appLocalizations),
+              const SizedBox(height: 30),
+              _buildTermsAndConditions(appLocalizations),
+              const SizedBox(height: 80),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   Widget _buildAvatar({
     required bool isMaster,
     required AppLocalizations? appLocalizations,

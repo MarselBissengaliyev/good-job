@@ -631,203 +631,207 @@ class _EditOrderPageState extends State<EditOrderPage>
     );
   }
 
-  Widget _buildImagesSection(AppLocalizations? appLocalizations) {
-    final hasImages = _existingImages.isNotEmpty || _newImages.isNotEmpty;
+Widget _buildImagesSection(AppLocalizations? appLocalizations) {
+  final hasImages = _existingImages.isNotEmpty || _newImages.isNotEmpty;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle(
-          appLocalizations?.translate('photos') ?? 'Фотографии',
-        ),
-        const SizedBox(height: 12),
-        if (!hasImages)
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.image, size: 40, color: Colors.grey[400]),
-                  const SizedBox(height: 8),
-                  Text(
-                    appLocalizations?.translate('no_photos') ??
-                        'Нет фотографий',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontFamily: 'Plus Jakarta Sans',
-                    ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSectionTitle(
+        appLocalizations?.translate('photos') ?? 'Фотографии',
+      ),
+      const SizedBox(height: 12),
+      
+      // Показываем контейнер "Нет фотографий" ИЛИ список фото
+      if (!hasImages)
+        Container(
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.image, size: 40, color: Colors.grey[400]),
+                const SizedBox(height: 8),
+                Text(
+                  appLocalizations?.translate('no_photos') ??
+                      'Нет фотографий',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontFamily: 'Plus Jakarta Sans',
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+        )
+      else
+        Column(
+          children: [
+            if (_existingImages.isNotEmpty) ...[
+              Text(
+                appLocalizations?.translate('current_photos') ??
+                    'Текущие фотографии',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF41454A),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
               ),
-            ),
-          )
-        else
-          Column(
-            children: [
-              if (_existingImages.isNotEmpty) ...[
-                Text(
-                  appLocalizations?.translate('current_photos') ??
-                      'Текущие фотографии',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF41454A),
-                    fontFamily: 'Plus Jakarta Sans',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 100,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _existingImages.length,
-                    itemBuilder: (context, index) {
-                      return Stack(
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              image: DecorationImage(
-                                image: NetworkImage(
-                                  _getFullImageUrl(_existingImages[index]),
-                                ),
-                                fit: BoxFit.cover,
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _existingImages.length,
+                  itemBuilder: (context, index) {
+                    return Stack(
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: DecorationImage(
+                              image: NetworkImage(
+                                _getFullImageUrl(_existingImages[index]),
                               ),
+                              fit: BoxFit.cover,
                             ),
                           ),
-                          Positioned(
-                            top: 4,
-                            right: 12,
-                            child: GestureDetector(
-                              onTap: () => _removeExistingImage(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE53935),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (_newImages.isNotEmpty) ...[
-                Text(
-                  appLocalizations?.translate('new_photos') ??
-                      'Новые фотографии',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF41454A),
-                    fontFamily: 'Plus Jakarta Sans',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 100,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _newImages.length,
-                    itemBuilder: (context, index) {
-                      return Stack(
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              image: DecorationImage(
-                                image: FileImage(_newImages[index]),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 4,
-                            right: 12,
-                            child: GestureDetector(
-                              onTap: () => _removeNewImage(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE53935),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  height: 56,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: const Color(0xFF0F7EDE),
-                      width: 1.5,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.add_photo_alternate_outlined,
-                        color: Color(0xFF0F7EDE),
-                        size: 24,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        appLocalizations?.translate('add_photo') ??
-                            'Добавить фото',
-                        style: const TextStyle(
-                          color: Color(0xFF0F7EDE),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          fontFamily: 'Plus Jakarta Sans',
                         ),
-                      ),
-                    ],
-                  ),
+                        Positioned(
+                          top: 4,
+                          right: 12,
+                          child: GestureDetector(
+                            onTap: () => _removeExistingImage(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE53935),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (_newImages.isNotEmpty) ...[
+              Text(
+                appLocalizations?.translate('new_photos') ??
+                    'Новые фотографии',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF41454A),
+                  fontFamily: 'Plus Jakarta Sans',
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _newImages.length,
+                  itemBuilder: (context, index) {
+                    return Stack(
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: DecorationImage(
+                              image: FileImage(_newImages[index]),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 12,
+                          child: GestureDetector(
+                            onTap: () => _removeNewImage(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE53935),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ],
+        ),
+      
+      // Кнопка добавления фото - выносим ВНЕ условия hasImages
+      const SizedBox(height: 16), // Добавляем отступ сверху
+      GestureDetector(
+        onTap: _pickImage,
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF0F7EDE),
+              width: 1.5,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.add_photo_alternate_outlined,
+                color: Color(0xFF0F7EDE),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                appLocalizations?.translate('add_photo') ??
+                    'Добавить фото',
+                style: const TextStyle(
+                  color: Color(0xFF0F7EDE),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  fontFamily: 'Plus Jakarta Sans',
                 ),
               ),
             ],
           ),
-      ],
-    );
-  }
-
+        ),
+      ),
+    ],
+  );
+}
   Widget _buildSectionTitle(String title) {
     return Text(
       title,

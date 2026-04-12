@@ -18,13 +18,22 @@ class ApiClient {
   Future<Map<String, String>> _getHeaders({bool requireAuth = true}) async {
     ApiLogger.logDebug('📋 _getHeaders: requireAuth=$requireAuth');
     final headers = Map<String, String>.from(ApiConfig.defaultHeaders);
-    
+
     if (requireAuth) {
       final token = await AuthService.getToken();
-      ApiLogger.logDebug('🔑 Получен токен: ${token != null ? "есть (${token.substring(0, token.length > 20 ? 20 : token.length)}...)" : "нет"}');
-      
+      ApiLogger.logDebug(
+        '🔑 Получен токен: ${token != null ? "есть (${token.substring(0, token.length > 20 ? 20 : token.length)}...)" : "нет"}',
+      );
+
       if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
+        // ✅ ИСПРАВЛЕНО: Проверяем, есть ли уже "Bearer" в токене
+        String authToken;
+        if (token.startsWith('Bearer ')) {
+          authToken = token; // Уже есть Bearer
+        } else {
+          authToken = 'Bearer $token'; // Добавляем Bearer
+        }
+        headers['Authorization'] = authToken;
         ApiLogger.logDebug('✅ Токен добавлен в заголовки');
       } else {
         ApiLogger.logDebug('⚠️ Токен отсутствует, но requireAuth=true');
@@ -32,7 +41,7 @@ class ApiClient {
     } else {
       ApiLogger.logDebug('ℹ️ Авторизация не требуется');
     }
-    
+
     return headers;
   }
 
@@ -46,15 +55,17 @@ class ApiClient {
     bool isRefreshAttempt = false, // Флаг для предотвращения рекурсии
   }) async {
     ApiLogger.logDebug('🚀 request START: $method $path');
-    ApiLogger.logDebug('📝 Параметры: requireAuth=$requireAuth, isRefreshAttempt=$isRefreshAttempt, data=${data != null ? "есть" : "нет"}, queryParams=${queryParams != null ? "есть" : "нет"}');
-    
+    ApiLogger.logDebug(
+      '📝 Параметры: requireAuth=$requireAuth, isRefreshAttempt=$isRefreshAttempt, data=${data != null ? "есть" : "нет"}, queryParams=${queryParams != null ? "есть" : "нет"}',
+    );
+
     // Строим URI с query параметрами
     var uri = Uri.parse('$baseUrl$path');
     if (queryParams != null && queryParams.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParams);
       ApiLogger.logDebug('🔧 Добавлены query параметры: $queryParams');
     }
-    
+
     ApiLogger.logDebug('🌐 Полный URL: $uri');
 
     // Функция выполнения запроса
@@ -62,11 +73,16 @@ class ApiClient {
       ApiLogger.logDebug('📡 executeRequest: начало выполнения');
       final headers = await _getHeaders(requireAuth: requireAuth);
       final body = data != null ? jsonEncode(data) : null;
-      
-      ApiLogger.logRequest(method, uri.toString(), headers: headers, body: data);
-      
+
+      ApiLogger.logRequest(
+        method,
+        uri.toString(),
+        headers: headers,
+        body: data,
+      );
+
       http.Response response;
-      
+
       try {
         switch (method.toUpperCase()) {
           case 'GET':
@@ -92,8 +108,10 @@ class ApiClient {
           default:
             throw ApiException('Unsupported HTTP method: $method');
         }
-        
-        ApiLogger.logDebug('📥 Получен ответ: statusCode=${response.statusCode}');
+
+        ApiLogger.logDebug(
+          '📥 Получен ответ: statusCode=${response.statusCode}',
+        );
         ApiLogger.logResponse(response.statusCode, response.body);
         return _handleResponse(response);
       } catch (e) {
@@ -101,9 +119,11 @@ class ApiClient {
         rethrow;
       }
     }
-    
+
     try {
-      ApiLogger.logDebug('⏱️ Запускаем запрос с таймаутом ${ApiConfig.connectionTimeout} секунд');
+      ApiLogger.logDebug(
+        '⏱️ Запускаем запрос с таймаутом ${ApiConfig.connectionTimeout} секунд',
+      );
       final result = await executeRequest().timeout(
         const Duration(seconds: ApiConfig.connectionTimeout),
         onTimeout: () {
@@ -120,36 +140,50 @@ class ApiClient {
         ApiLogger.logDebug('🔄 Пытаемся обновить токен...');
         // Пытаемся обновить токен
         final newToken = await _refreshToken();
-        
+
         if (newToken != null) {
           ApiLogger.logDebug('✅ Токен успешно обновлен, повторяем запрос');
           // Повторяем запрос с новым токеном
           final newHeaders = await _getHeaders(requireAuth: true);
           final body = data != null ? jsonEncode(data) : null;
-          
+
           http.Response retryResponse;
-          
+
           switch (method.toUpperCase()) {
             case 'GET':
               retryResponse = await http.get(uri, headers: newHeaders);
               break;
             case 'POST':
-              retryResponse = await http.post(uri, headers: newHeaders, body: body);
+              retryResponse = await http.post(
+                uri,
+                headers: newHeaders,
+                body: body,
+              );
               break;
             case 'PUT':
-              retryResponse = await http.put(uri, headers: newHeaders, body: body);
+              retryResponse = await http.put(
+                uri,
+                headers: newHeaders,
+                body: body,
+              );
               break;
             case 'DELETE':
               retryResponse = await http.delete(uri, headers: newHeaders);
               break;
             case 'PATCH':
-              retryResponse = await http.patch(uri, headers: newHeaders, body: body);
+              retryResponse = await http.patch(
+                uri,
+                headers: newHeaders,
+                body: body,
+              );
               break;
             default:
               throw ApiException('Unsupported HTTP method: $method');
           }
-          
-          ApiLogger.logDebug('📥 Получен повторный ответ: statusCode=${retryResponse.statusCode}');
+
+          ApiLogger.logDebug(
+            '📥 Получен повторный ответ: statusCode=${retryResponse.statusCode}',
+          );
           ApiLogger.logResponse(retryResponse.statusCode, retryResponse.body);
           return _handleResponse(retryResponse);
         } else {
@@ -159,7 +193,9 @@ class ApiClient {
           rethrow;
         }
       }
-      ApiLogger.logDebug('❌ Unauthorized, но requireAuth=false или isRefreshAttempt=true, пробрасываем дальше');
+      ApiLogger.logDebug(
+        '❌ Unauthorized, но requireAuth=false или isRefreshAttempt=true, пробрасываем дальше',
+      );
       rethrow;
     } on SocketException catch (e) {
       ApiLogger.logDebug('🌐 Ошибка сети: $e');
@@ -169,11 +205,11 @@ class ApiClient {
       rethrow;
     }
   }
-  
+
   // Обновление токена с очередью запросов
   Future<String?> _refreshToken() async {
     ApiLogger.logDebug('🔄 _refreshToken: начало');
-    
+
     // Если уже идет обновление, добавляем запрос в очередь
     if (_isRefreshing) {
       ApiLogger.logDebug('⏳ Уже идет обновление токена, добавляем в очередь');
@@ -182,65 +218,77 @@ class ApiClient {
       ApiLogger.logDebug('📋 В очереди ${_pendingRequests.length} запросов');
       return completer.future;
     }
-    
+
     _isRefreshing = true;
     ApiLogger.logDebug('🔒 Начинаем обновление токена');
-    
+
     try {
       final refreshToken = await AuthService.getRefreshToken();
-      ApiLogger.logDebug('🔑 Получен refresh токен: ${refreshToken != null ? "есть (${refreshToken.substring(0, refreshToken.length > 20 ? 20 : refreshToken.length)}...)" : "нет"}');
-      
+      ApiLogger.logDebug(
+        '🔑 Получен refresh токен: ${refreshToken != null ? "есть (${refreshToken.substring(0, refreshToken.length > 20 ? 20 : refreshToken.length)}...)" : "нет"}',
+      );
+
       if (refreshToken == null || refreshToken.isEmpty) {
         ApiLogger.logDebug('❌ Refresh токен отсутствует');
         return null;
       }
-      
-      ApiLogger.logDebug('📡 Отправляем запрос на обновление токена (isRefreshAttempt=true)');
-      
+
+      ApiLogger.logDebug(
+        '📡 Отправляем запрос на обновление токена (isRefreshAttempt=true)',
+      );
+
       // ВАЖНО: Используем прямой HTTP запрос, чтобы избежать рекурсии
       final uri = Uri.parse('$baseUrl/auth/refresh');
       final headers = Map<String, String>.from(ApiConfig.defaultHeaders);
       final body = jsonEncode({'refresh_token': refreshToken});
-      
-      final response = await http.post(
-        uri,
-        headers: headers,
-        body: body,
-      ).timeout(const Duration(seconds: ApiConfig.connectionTimeout));
-      
-      ApiLogger.logDebug('📥 Получен ответ от /auth/refresh: statusCode=${response.statusCode}');
-      
+
+      final response = await http
+          .post(uri, headers: headers, body: body)
+          .timeout(const Duration(seconds: ApiConfig.connectionTimeout));
+
+      ApiLogger.logDebug(
+        '📥 Получен ответ от /auth/refresh: statusCode=${response.statusCode}',
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         ApiLogger.logDebug('📦 Ответ от сервера: ${data.keys}');
-        
+
         if (data['accessToken'] != null && data['refreshToken'] != null) {
           ApiLogger.logDebug('✅ Получены новые токены');
-          
+
           // Сохраняем новые токены
           await AuthService.saveToken(data['accessToken']);
           await AuthService.saveRefreshToken(data['refreshToken']);
-          
+
           if (data['ttl'] != null) {
             await AuthService.saveTokenExpiry(data['ttl']);
-            ApiLogger.logDebug('⏱️ Сохранен TTL access токена: ${data['ttl']} секунд');
+            ApiLogger.logDebug(
+              '⏱️ Сохранен TTL access токена: ${data['ttl']} секунд',
+            );
           }
           if (data['refreshTtl'] != null) {
             await AuthService.saveRefreshTokenExpiry(data['refreshTtl']);
-            ApiLogger.logDebug('⏱️ Сохранен TTL refresh токена: ${data['refreshTtl']} секунд');
+            ApiLogger.logDebug(
+              '⏱️ Сохранен TTL refresh токена: ${data['refreshTtl']} секунд',
+            );
           }
-          
+
           // Обрабатываем ожидающие запросы
-          ApiLogger.logDebug('📋 Обрабатываем ${_pendingRequests.length} ожидающих запросов');
+          ApiLogger.logDebug(
+            '📋 Обрабатываем ${_pendingRequests.length} ожидающих запросов',
+          );
           for (final completer in _pendingRequests) {
             completer.complete(data['accessToken']);
           }
           _pendingRequests.clear();
-          
+
           ApiLogger.logDebug('✅ Обновление токена успешно завершено');
           return data['accessToken'];
         } else {
-          ApiLogger.logDebug('❌ Ответ не содержит accessToken или refreshToken');
+          ApiLogger.logDebug(
+            '❌ Ответ не содержит accessToken или refreshToken',
+          );
           return null;
         }
       } else if (response.statusCode == 401) {
@@ -248,18 +296,20 @@ class ApiClient {
         await AuthService.clearAuthData();
         return null;
       } else {
-        ApiLogger.logDebug('❌ Неожиданный статус ответа: ${response.statusCode}');
+        ApiLogger.logDebug(
+          '❌ Неожиданный статус ответа: ${response.statusCode}',
+        );
         return null;
       }
     } catch (e) {
       ApiLogger.logDebug('❌ Ошибка обновления токена: $e');
-      
+
       // Обрабатываем ожидающие запросы с ошибкой
       for (final completer in _pendingRequests) {
         completer.completeError(e);
       }
       _pendingRequests.clear();
-      
+
       return null;
     } finally {
       _isRefreshing = false;
@@ -270,7 +320,7 @@ class ApiClient {
   // Обработка ответа
   dynamic _handleResponse(http.Response response) {
     ApiLogger.logDebug('📊 _handleResponse: statusCode=${response.statusCode}');
-    
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
       ApiLogger.logDebug('✅ Успешный ответ (${response.statusCode})');
       if (response.body.isEmpty) {
@@ -304,17 +354,34 @@ class ApiClient {
   }
 
   // Упрощенные публичные методы
-  Future<dynamic> get(String path, {Map<String, String>? queryParams, bool requireAuth = true}) {
+  Future<dynamic> get(
+    String path, {
+    Map<String, String>? queryParams,
+    bool requireAuth = true,
+  }) {
     ApiLogger.logDebug('📡 GET вызов: $path');
-    return request('GET', path, queryParams: queryParams, requireAuth: requireAuth);
+    return request(
+      'GET',
+      path,
+      queryParams: queryParams,
+      requireAuth: requireAuth,
+    );
   }
 
-  Future<dynamic> post(String path, {Map<String, dynamic>? data, bool requireAuth = true}) {
+  Future<dynamic> post(
+    String path, {
+    Map<String, dynamic>? data,
+    bool requireAuth = true,
+  }) {
     ApiLogger.logDebug('📡 POST вызов: $path');
     return request('POST', path, data: data, requireAuth: requireAuth);
   }
 
-  Future<dynamic> put(String path, {Map<String, dynamic>? data, bool requireAuth = true}) {
+  Future<dynamic> put(
+    String path, {
+    Map<String, dynamic>? data,
+    bool requireAuth = true,
+  }) {
     ApiLogger.logDebug('📡 PUT вызов: $path');
     return request('PUT', path, data: data, requireAuth: requireAuth);
   }
@@ -324,7 +391,11 @@ class ApiClient {
     return request('DELETE', path, requireAuth: requireAuth);
   }
 
-  Future<dynamic> patch(String path, {Map<String, dynamic>? data, bool requireAuth = true}) {
+  Future<dynamic> patch(
+    String path, {
+    Map<String, dynamic>? data,
+    bool requireAuth = true,
+  }) {
     ApiLogger.logDebug('📡 PATCH вызов: $path');
     return request('PATCH', path, data: data, requireAuth: requireAuth);
   }

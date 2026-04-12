@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 
 import '../localization/app_localizations.dart';
@@ -26,15 +27,19 @@ class Registration4Page extends StatefulWidget {
   State<Registration4Page> createState() => _Registration4PageState();
 }
 
-class _Registration4PageState extends State<Registration4Page> with SingleTickerProviderStateMixin {
-  final List<TextEditingController> _controllers = List.generate(4, (_) => TextEditingController());
+class _Registration4PageState extends State<Registration4Page>
+    with SingleTickerProviderStateMixin {
+  final List<TextEditingController> _controllers = List.generate(
+    4,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
 
   Timer? _timer;
   late int _remainingSeconds;
   bool _isLoading = false;
   Map<String, dynamic>? _serverPayload;
-  
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -44,7 +49,7 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
     super.initState();
     _remainingSeconds = widget.codeTtl;
     _startTimer();
-    
+
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -53,13 +58,13 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
       parent: _animationController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
   }
 
@@ -82,100 +87,114 @@ class _Registration4PageState extends State<Registration4Page> with SingleTicker
     } else if (value.isEmpty && index > 0) {
       _focusNodes[index - 1].requestFocus();
     }
-    
+
     // Автоматическая отправка при полном вводе кода
     if (_currentInputCode.length == 4 && !_isLoading) {
       _confirmCode();
     }
-    
+
     setState(() {});
   }
 
-Future<void> _confirmCode() async {
-  final appLocalizations = AppLocalizations.of(context)!;
-  final code = _currentInputCode;
-  
-  if (code.length != 4 || _isLoading) return;
+  Future<void> _confirmCode() async {
+    final appLocalizations = AppLocalizations.of(context)!;
+    final code = _currentInputCode;
 
-  setState(() => _isLoading = true);
+    if (code.length != 4 || _isLoading) return;
 
-  try {
-    final response = await ApiService.confirmPhone(
-      telephone: widget.phoneNumber,
-      code: code,
-    );
+    setState(() => _isLoading = true);
 
-    // Сохраняем пару токенов
-    final accessToken = response['accessToken'];
-    final refreshToken = response['refreshToken'];
-    final ttl = response['ttl'];
-    final refreshTtl = response['refreshTtl'];
-
-    if (accessToken != null && refreshToken != null) {
-      await AuthService.saveTokenPair(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        ttl: ttl ?? 3600,
-        refreshTtl: refreshTtl ?? 86400,
+    try {
+      final response = await ApiService.confirmPhone(
+        telephone: widget.phoneNumber,
+        code: code,
       );
-    } else {
-      throw Exception('Токены не получены');
-    }
 
-    // Получаем роль пользователя
-    String? roleToSave;
-    if (_serverPayload != null && _serverPayload!['activeMode'] != null) {
-      roleToSave = _serverPayload!['activeMode'];
-    } else {
+      // Сохраняем пару токенов
+      final accessToken = response['accessToken'];
+      final refreshToken = response['refreshToken'];
+      final ttl = response['ttl'] ?? 3600; // обычно 1 час
+      final refreshTtl = response['refreshTtl'] ?? 86400; // обычно 24 часа
+
+      if (accessToken != null && refreshToken != null) {
+        // Сохраняем токены с их временем жизни
+        await AuthService.saveTokenPair(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          ttl: ttl,
+          refreshTtl: refreshTtl,
+        );
+      } else {
+        throw Exception('Токены не получены');
+      }
+
       final profile = await ApiService.getProfile();
-      roleToSave = profile['data']['activeMode'];
-    }
+      final userId = profile['data']['id']?.toString();
+      final userRole = profile['data']['activeMode']?.toString();
 
-    if (roleToSave != null) {
-      await AuthService.saveUserRole(roleToSave);
-    }
+      if (userId != null) {
+        const secureStorage = FlutterSecureStorage();
+        await secureStorage.write(key: 'user_id', value: userId);
+      }
 
-    if (!mounted) return;
+      if (userRole != null) {
+        await AuthService.saveUserRole(userRole);
+      }
 
-    // Показываем успешное уведомление
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(appLocalizations.translate('code_confirmed_success')),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      await AuthService.debugPrintStoredData();
 
-    // Редирект
-    if (roleToSave == 'master') {
-      Navigator.pushNamedAndRemoveUntil(context, '/account-master', (route) => false);
-    } else {
-      Navigator.pushNamedAndRemoveUntil(context, '/account-client', (route) => false);
+      if (!mounted) return;
+
+      // Показываем успешное уведомление
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(appLocalizations.translate('code_confirmed_success')),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Редирект
+      if (userRole == 'master') {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/account-master',
+          (route) => false,
+        );
+      } else {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/account-client',
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${appLocalizations.translate('error')}: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // Очищаем поля при ошибке
+      for (var controller in _controllers) {
+        controller.clear();
+      }
+      _focusNodes[0].requestFocus();
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${appLocalizations.translate('error')}: $e'),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-    
-    // Очищаем поля при ошибке
-    for (var controller in _controllers) {
-      controller.clear();
-    }
-    _focusNodes[0].requestFocus();
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
+
   Future<void> _resendCode() async {
     final appLocalizations = AppLocalizations.of(context)!;
-    
+
     setState(() => _isLoading = true);
 
     try {
@@ -185,7 +204,8 @@ Future<void> _confirmCode() async {
           lastname: widget.registeringData?['lastname'] ?? 'temp',
           telephone: widget.phoneNumber,
           cityId: widget.registeringData?['city_id'] ?? 0,
-          activeMode: widget.registeringData?['active_mode'] ?? 'client',);
+          activeMode: widget.registeringData?['active_mode'] ?? 'client',
+        );
       } else {
         await ApiService.login(telephone: widget.phoneNumber);
       }
@@ -193,13 +213,13 @@ Future<void> _confirmCode() async {
         _remainingSeconds = widget.codeTtl;
       });
       _startTimer();
-      
+
       // Очищаем поля при повторной отправке
       for (var controller in _controllers) {
         controller.clear();
       }
       _focusNodes[0].requestFocus();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(appLocalizations.translate('code_resent')),
@@ -277,7 +297,10 @@ Future<void> _confirmCode() async {
                               gradient: LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [Colors.blue.shade400, Colors.blue.shade700],
+                                colors: [
+                                  Colors.blue.shade400,
+                                  Colors.blue.shade700,
+                                ],
                               ),
                               shape: BoxShape.circle,
                               boxShadow: [
@@ -288,9 +311,13 @@ Future<void> _confirmCode() async {
                                 ),
                               ],
                             ),
-                            child: const Icon(Icons.sms, size: 48, color: Colors.white),
+                            child: const Icon(
+                              Icons.sms,
+                              size: 48,
+                              color: Colors.white,
+                            ),
                           ),
-                          
+
                           const SizedBox(height: 24),
 
                           Text(
@@ -314,9 +341,12 @@ Future<void> _confirmCode() async {
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 4),
-                          
+
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.blue.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(20),
@@ -331,17 +361,20 @@ Future<void> _confirmCode() async {
                               ),
                             ),
                           ),
-                          
+
                           const SizedBox(height: 32),
 
                           // Поля ввода кода
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: List.generate(4, (index) => _buildOtpField(index)),
+                            children: List.generate(
+                              4,
+                              (index) => _buildOtpField(index),
+                            ),
                           ),
-                          
+
                           const SizedBox(height: 16),
-                          
+
                           // Прогресс бар
                           Container(
                             width: 200,
@@ -360,9 +393,9 @@ Future<void> _confirmCode() async {
                               ),
                             ),
                           ),
-                          
+
                           const SizedBox(height: 24),
-                          
+
                           _buildTimerOrResend(appLocalizations),
                         ],
                       ),
@@ -378,7 +411,11 @@ Future<void> _confirmCode() async {
     );
   }
 
-  Widget _buildLanguageButton(BuildContext context, LanguageProvider languageProvider, AppLocalizations appLocalizations) {
+  Widget _buildLanguageButton(
+    BuildContext context,
+    LanguageProvider languageProvider,
+    AppLocalizations appLocalizations,
+  ) {
     return Container(
       margin: const EdgeInsets.only(right: 16),
       decoration: BoxDecoration(
@@ -388,20 +425,42 @@ Future<void> _confirmCode() async {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildLanguageOption('RU', const Locale('ru'), languageProvider.locale.languageCode == 'ru', languageProvider, context),
-          _buildLanguageOption('KZ', const Locale('kk'), languageProvider.locale.languageCode == 'kk', languageProvider, context),
+          _buildLanguageOption(
+            'RU',
+            const Locale('ru'),
+            languageProvider.locale.languageCode == 'ru',
+            languageProvider,
+            context,
+          ),
+          _buildLanguageOption(
+            'KZ',
+            const Locale('kk'),
+            languageProvider.locale.languageCode == 'kk',
+            languageProvider,
+            context,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLanguageOption(String code, Locale locale, bool isActive, LanguageProvider provider, BuildContext context) {
+  Widget _buildLanguageOption(
+    String code,
+    Locale locale,
+    bool isActive,
+    LanguageProvider provider,
+    BuildContext context,
+  ) {
     return GestureDetector(
       onTap: () {
         provider.setLanguage(locale);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(locale.languageCode == 'ru' ? 'Язык изменен на русский' : 'Тіл қазақшаға өзгертілді'),
+            content: Text(
+              locale.languageCode == 'ru'
+                  ? 'Язык изменен на русский'
+                  : 'Тіл қазақшаға өзгертілді',
+            ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 1),
             behavior: SnackBarBehavior.floating,
@@ -499,7 +558,7 @@ Future<void> _confirmCode() async {
         ],
       );
     }
-    
+
     return TextButton(
       onPressed: _isLoading ? null : _resendCode,
       style: TextButton.styleFrom(
@@ -519,7 +578,10 @@ Future<void> _confirmCode() async {
     );
   }
 
-  Widget _buildBottomButtons(bool isCodeFull, AppLocalizations appLocalizations) {
+  Widget _buildBottomButtons(
+    bool isCodeFull,
+    AppLocalizations appLocalizations,
+  ) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(24.0),
@@ -532,7 +594,9 @@ Future<void> _confirmCode() async {
             child: ElevatedButton(
               onPressed: isCodeFull && !_isLoading ? _confirmCode : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: isCodeFull ? Colors.blue.shade700 : Colors.grey.shade400,
+                backgroundColor: isCodeFull
+                    ? Colors.blue.shade700
+                    : Colors.grey.shade400,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),

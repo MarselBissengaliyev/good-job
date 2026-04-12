@@ -9,17 +9,15 @@ class AuthService {
   static const String _refreshTokenExpiryKey = 'refreshToken_expiry';
   static const String _userRoleKey = 'user_role';
   static const String _userIdKey = 'user_id';
-  
+
   // Используем secure storage для токенов
   static final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true, // Включаем шифрование на Android
     ),
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
-  
+
   // Для обычных данных (не токенов) можно оставить SharedPreferences
   // Но для единообразия лучше все хранить в secure storage
 
@@ -61,16 +59,17 @@ class AuthService {
       }
 
       // Вызываем API для обновления токенов
-      final response = await ApiService.refreshToken(refreshToken: refreshToken);
+      final response = await ApiService.refreshToken(
+        refreshToken: refreshToken,
+      );
 
-      if (response != null && 
-          response['accessToken'] != null && 
+      if (response != null &&
+          response['accessToken'] != null &&
           response['refreshToken'] != null) {
-        
         // Сохраняем новые токены
         await saveToken(response['accessToken']);
         await saveRefreshToken(response['refreshToken']);
-        
+
         // Сохраняем время жизни токенов
         if (response['ttl'] != null) {
           await saveTokenExpiry(response['ttl']);
@@ -114,7 +113,10 @@ class AuthService {
   static Future<void> saveTokenExpiry(int ttlSeconds) async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _secureStorage.write(key: _tokenExpiryKey, value: (now + ttlSeconds).toString());
+      await _secureStorage.write(
+        key: _tokenExpiryKey,
+        value: (now + ttlSeconds).toString(),
+      );
     } catch (e) {
       print('Ошибка сохранения expiry: $e');
     }
@@ -124,7 +126,10 @@ class AuthService {
   static Future<void> saveRefreshTokenExpiry(int ttlSeconds) async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _secureStorage.write(key: _refreshTokenExpiryKey, value: (now + ttlSeconds).toString());
+      await _secureStorage.write(
+        key: _refreshTokenExpiryKey,
+        value: (now + ttlSeconds).toString(),
+      );
     } catch (e) {
       print('Ошибка сохранения refresh expiry: $e');
     }
@@ -141,6 +146,19 @@ class AuthService {
     await saveRefreshToken(refreshToken);
     await saveTokenExpiry(ttl);
     await saveRefreshTokenExpiry(refreshTtl);
+  }
+
+  static Future<void> debugPrintStoredData() async {
+    print('=== DEBUG AUTH DATA ===');
+    print('Token: ${await _secureStorage.read(key: _tokenKey)}');
+    print('Refresh Token: ${await _secureStorage.read(key: _refreshTokenKey)}');
+    print('Token Expiry: ${await _secureStorage.read(key: _tokenExpiryKey)}');
+    print(
+      'Refresh Expiry: ${await _secureStorage.read(key: _refreshTokenExpiryKey)}',
+    );
+    print('User Role: ${await _secureStorage.read(key: _userRoleKey)}');
+    print('User ID: ${await _secureStorage.read(key: _userIdKey)}');
+    print('======================');
   }
 
   // Сохранение роли пользователя
@@ -259,13 +277,13 @@ class AuthService {
     try {
       final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
       if (expiryStr == null) return null;
-      
+
       final expiry = int.tryParse(expiryStr);
       if (expiry == null) return null;
-      
+
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       final remaining = expiry - now;
-      
+
       return remaining > 0 ? remaining : 0;
     } catch (e) {
       return null;

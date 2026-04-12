@@ -15,23 +15,27 @@ import 'localization/app_localizations.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Future.delayed(const Duration(milliseconds: 100));
+
   // Проверяем, авторизован ли пользователь
   final isLoggedIn = await AuthService.isLoggedIn();
   final userRole = await AuthService.getUserRole();
+
+  print('Main - isLoggedIn: $isLoggedIn, userRole: $userRole'); // Отладка
 
   runApp(MyApp(initialRoute: _getInitialRoute(isLoggedIn, userRole)));
 }
 
 String _getInitialRoute(bool isLoggedIn, String? userRole) {
   if (!isLoggedIn) {
-    return '/';
+    return '/registration';
   }
 
   // Определяем куда перенаправить в зависимости от роли
   if (userRole == 'master') {
-    return '/account-master';
+    return '/master-home';
   } else {
-    return '/account-client';
+    return '/client-home';
   }
 }
 
@@ -53,10 +57,7 @@ class MyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             title: 'GoodJob',
             locale: languageProvider.locale,
-            supportedLocales: const [
-              Locale('ru', ''),
-              Locale('kk', ''),
-            ],
+            supportedLocales: const [Locale('ru', ''), Locale('kk', '')],
             localizationsDelegates: const [
               AppLocalizations.delegate,
               GlobalMaterialLocalizations.delegate,
@@ -75,12 +76,23 @@ class MyApp extends StatelessWidget {
             ),
             initialRoute: initialRoute,
             routes: {
-              '/': (context) => const AuthChecker(),
               '/registration': (context) => const MyHomePage(),
-              '/account-master': (context) =>
-                  const EditProfilePage(initialMode: ProfileMode.master),
-              '/account-client': (context) =>
-                  const AccountPage(accountType: AccountType.client),
+              '/master-home': (context) => const MasterHomePage(),
+              '/client-home': (context) => const ClientHomePage(),
+            },
+            onGenerateRoute: (settings) {
+              // Обработка динамических маршрутов
+              if (settings.name == '/account-master') {
+                return MaterialPageRoute(
+                  builder: (context) => const EditProfilePage(initialMode: ProfileMode.master),
+                );
+              }
+              if (settings.name == '/account-client') {
+                return MaterialPageRoute(
+                  builder: (context) => const AccountPage(accountType: AccountType.client),
+                );
+              }
+              return null;
             },
           );
         },
@@ -89,92 +101,24 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Обновленный AuthChecker с поддержкой локализации
-class AuthChecker extends StatefulWidget {
-  const AuthChecker({super.key});
-
-  @override
-  State<AuthChecker> createState() => _AuthCheckerState();
-}
-
-class _AuthCheckerState extends State<AuthChecker> {
-  @override
-  void initState() {
-    super.initState();
-    _checkAuth();
-  }
-
-  Future<void> _checkAuth() async {
-    try {
-      // Проверяем авторизацию с возможным обновлением токена
-      final isLoggedIn = await AuthService.isLoggedIn();
-      
-      if (!isLoggedIn) {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/registration');
-        }
-        return;
-      }
-
-      final role = await _getUserRole();
-
-      if (mounted) {
-        if (role == 'master') {
-          Navigator.pushReplacementNamed(context, '/account-master');
-        } else {
-          Navigator.pushReplacementNamed(context, '/account-client');
-        }
-      }
-    } catch (e) {
-      print('Авторизация не пройдена: $e');
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/registration');
-      }
-    }
-  }
-
-  Future<String> _getUserRole() async {
-    try {
-      final profileResponse = await ApiService.getProfile();
-      final activeMode = profileResponse['data']['active_mode'] as String;
-      await AuthService.saveUserRole(activeMode);
-      
-      // Сохраняем ID пользователя в secure storage
-      final userId = profileResponse['data']['id']?.toString();
-      if (userId != null) {
-        const secureStorage = FlutterSecureStorage();
-        await secureStorage.write(key: 'user_id', value: userId);
-      }
-      
-      return activeMode;
-    } catch (e) {
-      rethrow;
-    }
-  }
+// Главная страница для мастера
+class MasterHomePage extends StatelessWidget {
+  const MasterHomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final appLocalizations = AppLocalizations.of(context)!;
-    
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 20),
-            Text(
-              appLocalizations.translate('checking_auth'),
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-                fontFamily: 'Plus Jakarta Sans',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const EditProfilePage(initialMode: ProfileMode.master);
   }
 }
+
+// Главная страница для клиента
+class ClientHomePage extends StatelessWidget {
+  const ClientHomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AccountPage(accountType: AccountType.client);
+  }
+}
+
+// Удаляем AuthChecker, так как он больше не нужен и вызывает проблемы

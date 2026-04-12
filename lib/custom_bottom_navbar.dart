@@ -66,7 +66,7 @@ class CustomBottomNavBar extends StatelessWidget {
         iconAsset: 'assets/price.png',
         label: appLocalizations?.translate('price') ?? 'Прайс',
         navItem: NavItem.price,
-        destination:  PricePage(),
+        destination: PricePage(),
       ),
       _buildNavItem(
         context,
@@ -92,7 +92,7 @@ class CustomBottomNavBar extends StatelessWidget {
         iconAsset: 'assets/price.png',
         label: appLocalizations?.translate('price') ?? 'Прайс',
         navItem: NavItem.price,
-        destination:  PricePage(),
+        destination: PricePage(),
       ),
       _buildNavItem(
         context,
@@ -116,12 +116,14 @@ class CustomBottomNavBar extends StatelessWidget {
     final Color inactiveColor = const Color(0xFF5F6368);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          _createPageRoute(destination),
-        );
-      },
+      onTap: isActive
+          ? null // Если активна - отключаем нажатие
+          : () {
+              Navigator.push(
+                context,
+                _createPageRoute(destination),
+              );
+            },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -271,7 +273,9 @@ class CustomBottomNavBarDynamic extends StatelessWidget {
     final Color inactiveColor = const Color(0xFF5F6368);
 
     return GestureDetector(
-      onTap: () => onItemSelected(navItem),
+      onTap: isActive
+          ? null // Если активна - отключаем нажатие
+          : () => onItemSelected(navItem),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -365,6 +369,9 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
         activeItem: _activeItem,
         accountType: widget.accountType,
         onItemSelected: (item) {
+          // Проверяем, не активен ли уже этот пункт
+          if (_activeItem == item) return;
+          
           setState(() {
             _activeItem = item;
             _pageController.animateToPage(
@@ -416,16 +423,16 @@ class _NavigationWrapperState extends State<NavigationWrapper> {
 
   List<Widget> _getPages() {
     if (widget.accountType == AccountType.master) {
-      return  [
-        OrdersMasterPage(),
+      return [
+        const OrdersMasterPage(),
         PricePage(),
-        AccountPage(accountType: AccountType.master),
+        const AccountPage(accountType: AccountType.master),
       ];
     } else {
-      return  [
-        MyOrdersClientPage(),
+      return [
+        const MyOrdersClientPage(),
         PricePage(),
-        AddOrderClientPage(),
+        const AddOrderClientPage(),
       ];
     }
   }

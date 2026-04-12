@@ -91,7 +91,7 @@ class AuthApi {
     }
   }
 
-  Future<Map<String, dynamic>> refreshToken({required String refreshToken}) async {
+  Future<Map<String, dynamic>?> refreshToken({required String refreshToken}) async {
     const method = 'POST';
     const url = '/auth/refresh';
     final body = {'refreshToken': refreshToken};
@@ -105,7 +105,7 @@ class AuthApi {
       return response;
     } catch (e) {
       ApiLogger.logError(e);
-      rethrow;
+      return null;
     }
   }
 
