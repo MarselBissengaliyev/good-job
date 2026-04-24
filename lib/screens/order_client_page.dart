@@ -825,7 +825,7 @@ class _OrderClientPageState extends State<OrderClientPage>
   String? _getFullImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return null;
     if (imagePath.startsWith('http')) return imagePath;
-    return 'http://gj-back.checkedout.kz/storage/$imagePath';
+    return 'https://good-job.kz/storage/$imagePath';
   }
 
   String _formatDate(String? dateString) {

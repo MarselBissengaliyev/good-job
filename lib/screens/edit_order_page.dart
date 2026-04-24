@@ -1259,6 +1259,6 @@ Widget _buildImagesSection(AppLocalizations? appLocalizations) {
 
   String _getFullImageUrl(String imagePath) {
     if (imagePath.startsWith('http')) return imagePath;
-    return 'http://gj-back.checkedout.kz/storage/$imagePath';
+    return 'https://good-job.kz/storage/$imagePath';
   }
 }

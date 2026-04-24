@@ -824,7 +824,7 @@ class _AccountPageState extends State<AccountPage>
           child: ClipOval(
             child: avatarUrl != null && avatarUrl.isNotEmpty
                 ? Image.network(
-                    'http://gj-back.checkedout.kz/storage/$avatarUrl',
+                    'https://good-job.kz/storage/$avatarUrl',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Center(
@@ -2107,7 +2107,7 @@ class _AccountPageState extends State<AccountPage>
                                 borderRadius: radius,
                                 image: DecorationImage(
                                   image: NetworkImage(
-                                    'http://gj-back.checkedout.kz/storage/${workPhoto.path}',
+                                    'https://good-job.kz/storage/${workPhoto.path}',
                                   ),
                                   fit: BoxFit.cover,
                                 ),

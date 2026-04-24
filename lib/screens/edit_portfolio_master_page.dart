@@ -423,7 +423,7 @@ class _EditPortfolioMasterPageState extends State<EditPortfolioMasterPage>
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
-                  'http://gj-back.checkedout.kz/storage/${_portfolioImages[index].path}',
+                  'https://good-job.kz/storage/${_portfolioImages[index].path}',
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: double.infinity,

@@ -2199,7 +2199,7 @@ class _OrdersMasterPageState extends State<OrdersMasterPage>
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              'http://gj-back.checkedout.kz/storage/${getFirstImage()}',
+                              'https://good-job.kz/storage/${getFirstImage()}',
                               fit: BoxFit.cover,
                               width: 100,
                               height: 100,

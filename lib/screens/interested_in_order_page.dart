@@ -331,7 +331,7 @@ class _InterestedInOrderPageState extends State<InterestedInOrderPage> {
   String? _getFullImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return null;
     if (imagePath.startsWith('http')) return imagePath;
-    return 'http://gj-back.checkedout.kz/storage/$imagePath';
+    return 'https://good-job.kz/storage/$imagePath';
   }
 
   Widget _buildImageGallery() {

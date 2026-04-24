@@ -106,7 +106,7 @@ class _MyOrdersClientPageState extends State<MyOrdersClientPage>
 
   String _getFullImageUrl(String imagePath) {
     if (imagePath.startsWith('http')) return imagePath;
-    return 'http://gj-back.checkedout.kz/storage/$imagePath';
+    return 'https://good-job.kz/storage/$imagePath';
   }
 
   String _formatDate(String? dateString) {

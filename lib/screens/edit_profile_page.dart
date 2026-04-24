@@ -1183,7 +1183,7 @@ Future<void> _loadInitialData() async {
                   : _avatarImage != null
                   ? Image.file(_avatarImage!, fit: BoxFit.cover)
                   : (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                  ? Image.network('http://gj-back.checkedout.kz/storage/$_avatarUrl', fit: BoxFit.cover)
+                  ? Image.network('https://good-job.kz/storage/$_avatarUrl', fit: BoxFit.cover)
                   : const Icon(Icons.person, size: 60, color: Colors.white),
             ),
           ),
