@@ -1,8 +1,11 @@
 // lib/services/api_service.dart (обновленный)
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:goodjob/models/work-photo.dart';
+import 'package:goodjob/services/api/api_logger.dart';
 import 'package:goodjob/services/api/avatar_api.dart';
+import 'package:goodjob/services/auth/auth_service.dart';
 import 'package:goodjob/services/client/order_images_api.dart';
 
 import 'api/api_client.dart';
@@ -46,6 +49,31 @@ class ApiService {
 
   static Future<Map<String, dynamic>> uploadAvatar(File imageFile) {
     return _avatarApi.uploadAvatar(imageFile);
+  }
+
+  static Future<Map<String, dynamic>> uploadAvatarWeb(FormData formData) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw UnauthorizedException('Токен не найден');
+      }
+
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: 'https://good-job.kz/api',
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      final response = await dio.put('/me/avatar', data: formData);
+      return response.data;
+    } catch (e) {
+      ApiLogger.logError(e);
+      rethrow;
+    }
   }
 
   // Master методы
@@ -284,10 +312,9 @@ class ApiService {
 
   static Future<void> revokeOrder(String orderId) =>
       _ordersApi.revokeOrder(orderId);
-    
-      static Future<void> archiveOrder(String orderId) =>
-      _ordersApi.archiveOrder(orderId);
 
+  static Future<void> archiveOrder(String orderId) =>
+      _ordersApi.archiveOrder(orderId);
 
   static Future<void> changeOrderStatus({
     required String orderId,

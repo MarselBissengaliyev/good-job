@@ -9,6 +9,9 @@ import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth/auth_service.dart';
 
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
+
 class Registration4Page extends StatefulWidget {
   final String phoneNumber;
   final int codeTtl;
@@ -97,100 +100,118 @@ class _Registration4PageState extends State<Registration4Page>
   }
 
   Future<void> _confirmCode() async {
-    final appLocalizations = AppLocalizations.of(context)!;
-    final code = _currentInputCode;
+  final appLocalizations = AppLocalizations.of(context)!;
+  final code = _currentInputCode;
 
-    if (code.length != 4 || _isLoading) return;
+  if (code.length != 4 || _isLoading) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      final response = await ApiService.confirmPhone(
-        telephone: widget.phoneNumber,
-        code: code,
+  try {
+    final response = await ApiService.confirmPhone(
+      telephone: widget.phoneNumber,
+      code: code,
+    );
+
+    print('📦 Confirm response: $response');
+
+    // Сохраняем пару токенов через AuthService (работает и на Web)
+    final accessToken = response['accessToken'];
+    final refreshToken = response['refreshToken'];
+    final ttl = response['ttl'] ?? 3600;
+    final refreshTtl = response['refreshTtl'] ?? 86400;
+
+    if (accessToken != null && refreshToken != null) {
+      // ✅ Используем AuthService для сохранения всех данных
+      await AuthService.saveTokenPair(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        ttl: ttl,
+        refreshTtl: refreshTtl,
       );
-
-      // Сохраняем пару токенов
-      final accessToken = response['accessToken'];
-      final refreshToken = response['refreshToken'];
-      final ttl = response['ttl'] ?? 3600; // обычно 1 час
-      final refreshTtl = response['refreshTtl'] ?? 86400; // обычно 24 часа
-
-      if (accessToken != null && refreshToken != null) {
-        // Сохраняем токены с их временем жизни
-        await AuthService.saveTokenPair(
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-          ttl: ttl,
-          refreshTtl: refreshTtl,
-        );
-      } else {
-        throw Exception('Токены не получены');
-      }
-
-      final profile = await ApiService.getProfile();
-      final userId = profile['data']['id']?.toString();
-      final userRole = profile['data']['activeMode']?.toString();
-
-      if (userId != null) {
-        const secureStorage = FlutterSecureStorage();
-        await secureStorage.write(key: 'user_id', value: userId);
-      }
-
-      if (userRole != null) {
-        await AuthService.saveUserRole(userRole);
-      }
-
-      await AuthService.debugPrintStoredData();
-
-      if (!mounted) return;
-
-      // Показываем успешное уведомление
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(appLocalizations.translate('code_confirmed_success')),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      // Редирект
-      if (userRole == 'master') {
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          '/account-master',
-          (route) => false,
-        );
-      } else {
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          '/account-client',
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${appLocalizations.translate('error')}: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-
-      // Очищаем поля при ошибке
-      for (var controller in _controllers) {
-        controller.clear();
-      }
-      _focusNodes[0].requestFocus();
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      
+      print('✅ Tokens saved via AuthService');
+    } else {
+      throw Exception('Токены не получены');
     }
+
+    // Получаем профиль
+    final profile = await ApiService.getProfile();
+    print('📦 Profile response: $profile');
+    
+    final userId = profile['data']['id']?.toString();
+    final userRole = profile['data']['activeMode']?.toString();
+
+    // ✅ Сохраняем userId через AuthService (не напрямую через secureStorage)
+    if (userId != null) {
+      await AuthService.saveUserId(userId); // Нужно добавить этот метод
+    }
+
+    if (userRole != null) {
+      await AuthService.saveUserRole(userRole);
+    }
+
+    // Проверяем что сохранилось
+    await AuthService.debugPrintStoredData();
+
+    // Проверяем напрямую localStorage для Web
+    if (kIsWeb) {
+      print('🔍 Direct localStorage check:');
+      print('auth_token: ${html.window.localStorage['auth_token']}');
+      print('refreshToken: ${html.window.localStorage['refreshToken']}');
+      print('user_role: ${html.window.localStorage['user_role']}');
+      print('user_id: ${html.window.localStorage['user_id']}');
+    }
+
+    if (!mounted) return;
+
+    // Показываем успешное уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(appLocalizations.translate('code_confirmed_success')),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    // Редирект
+    if (userRole == 'master') {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/account-master',
+        (route) => false,
+      );
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/account-client',
+        (route) => false,
+      );
+    }
+  } catch (e) {
+    print('❌ Error in _confirmCode: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${appLocalizations.translate('error')}: $e'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    // Очищаем поля при ошибке
+    for (var controller in _controllers) {
+      controller.clear();
+    }
+    _focusNodes[0].requestFocus();
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   Future<void> _resendCode() async {
     final appLocalizations = AppLocalizations.of(context)!;

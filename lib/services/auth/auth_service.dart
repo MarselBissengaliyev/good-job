@@ -1,4 +1,6 @@
 // lib/services/auth/auth_service.dart
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:goodjob/services/api_service.dart';
 
@@ -10,33 +12,111 @@ class AuthService {
   static const String _userRoleKey = 'user_role';
   static const String _userIdKey = 'user_id';
 
-  // Используем secure storage для токенов
-  static final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true, // Включаем шифрование на Android
-    ),
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
-  );
+  static Future<void> saveUserId(String userId) async {
+    await _write(_userIdKey, userId);
+  }
 
-  // Для обычных данных (не токенов) можно оставить SharedPreferences
-  // Но для единообразия лучше все хранить в secure storage
+  // Используем secure storage только для мобильных платформ
+  static final FlutterSecureStorage? _secureStorage = !kIsWeb
+      ? FlutterSecureStorage(
+          aOptions: AndroidOptions(encryptedSharedPreferences: true),
+          iOptions: IOSOptions(
+            accessibility: KeychainAccessibility.first_unlock,
+          ),
+        )
+      : null;
+
+  // Для Web используем localStorage
+  static void _saveToLocalStorage(String key, String value) {
+    if (kIsWeb) {
+      html.window.localStorage[key] = value;
+      print('💾 Web: Saved $key to localStorage');
+    }
+  }
+
+  static String? _getFromLocalStorage(String key) {
+    if (kIsWeb) {
+      return html.window.localStorage[key];
+    }
+    return null;
+  }
+
+  static void _removeFromLocalStorage(String key) {
+    if (kIsWeb) {
+      html.window.localStorage.remove(key);
+      print('🗑️ Web: Removed $key from localStorage');
+    }
+  }
+
+  // Универсальный метод записи
+  static Future<void> _write(String key, String value) async {
+    try {
+      if (kIsWeb) {
+        _saveToLocalStorage(key, value);
+      } else {
+        await _secureStorage?.write(key: key, value: value);
+      }
+      print('✅ Saved $key successfully');
+    } catch (e) {
+      print('❌ Error saving $key: $e');
+      // Fallback для Web если localStorage не работает
+      if (kIsWeb) {
+        try {
+          html.window.sessionStorage[key] = value;
+          print('💾 Fallback: Saved $key to sessionStorage');
+        } catch (e2) {
+          print('❌ Fallback also failed: $e2');
+        }
+      }
+    }
+  }
+
+  // Универсальный метод чтения
+  static Future<String?> _read(String key) async {
+    try {
+      if (kIsWeb) {
+        return _getFromLocalStorage(key);
+      } else {
+        return await _secureStorage?.read(key: key);
+      }
+    } catch (e) {
+      print('❌ Error reading $key: $e');
+      return null;
+    }
+  }
+
+  // Универсальный метод удаления
+  static Future<void> _delete(String key) async {
+    try {
+      if (kIsWeb) {
+        _removeFromLocalStorage(key);
+      } else {
+        await _secureStorage?.delete(key: key);
+      }
+      print('✅ Deleted $key successfully');
+    } catch (e) {
+      print('❌ Error deleting $key: $e');
+    }
+  }
 
   // Проверка авторизации с обновлением токена
   static Future<bool> isLoggedIn() async {
     try {
-      final token = await _secureStorage.read(key: _tokenKey);
-      final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
+      final token = await _read(_tokenKey);
+      final refreshToken = await _read(_refreshTokenKey);
+
+      print('🔍 Checking login: token=$token, refreshToken=$refreshToken');
 
       if (token == null || token.isEmpty) return false;
       if (refreshToken == null || refreshToken.isEmpty) return false;
 
-      final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
+      final expiryStr = await _read(_tokenExpiryKey);
       if (expiryStr != null) {
         final expiry = int.tryParse(expiryStr);
         if (expiry != null) {
           final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
           if (now >= expiry) {
-            // Токен истек, пробуем обновить
+            print('⏰ Token expired, refreshing...');
             return await refreshTokenPair();
           }
         }
@@ -52,7 +132,7 @@ class AuthService {
   // Обновление пары токенов (ротация)
   static Future<bool> refreshTokenPair() async {
     try {
-      final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
+      final refreshToken = await _read(_refreshTokenKey);
 
       if (refreshToken == null || refreshToken.isEmpty) {
         return false;
@@ -93,30 +173,19 @@ class AuthService {
 
   // Сохранение access токена
   static Future<void> saveToken(String token) async {
-    try {
-      await _secureStorage.write(key: _tokenKey, value: token);
-    } catch (e) {
-      print('Ошибка сохранения токена: $e');
-    }
+    await _write(_tokenKey, token);
   }
 
   // Сохранение refresh токена
   static Future<void> saveRefreshToken(String refreshToken) async {
-    try {
-      await _secureStorage.write(key: _refreshTokenKey, value: refreshToken);
-    } catch (e) {
-      print('Ошибка сохранения refresh токена: $e');
-    }
+    await _write(_refreshTokenKey, refreshToken);
   }
 
   // Сохранение времени жизни access токена
   static Future<void> saveTokenExpiry(int ttlSeconds) async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _secureStorage.write(
-        key: _tokenExpiryKey,
-        value: (now + ttlSeconds).toString(),
-      );
+      await _write(_tokenExpiryKey, (now + ttlSeconds).toString());
     } catch (e) {
       print('Ошибка сохранения expiry: $e');
     }
@@ -126,10 +195,7 @@ class AuthService {
   static Future<void> saveRefreshTokenExpiry(int ttlSeconds) async {
     try {
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _secureStorage.write(
-        key: _refreshTokenExpiryKey,
-        value: (now + ttlSeconds).toString(),
-      );
+      await _write(_refreshTokenExpiryKey, (now + ttlSeconds).toString());
     } catch (e) {
       print('Ошибка сохранения refresh expiry: $e');
     }
@@ -142,75 +208,69 @@ class AuthService {
     required int ttl,
     required int refreshTtl,
   }) async {
+    print('💾 Saving token pair...');
     await saveToken(accessToken);
     await saveRefreshToken(refreshToken);
     await saveTokenExpiry(ttl);
     await saveRefreshTokenExpiry(refreshTtl);
+    await debugPrintStoredData(); // Проверяем что сохранилось
   }
 
   static Future<void> debugPrintStoredData() async {
     print('=== DEBUG AUTH DATA ===');
-    print('Token: ${await _secureStorage.read(key: _tokenKey)}');
-    print('Refresh Token: ${await _secureStorage.read(key: _refreshTokenKey)}');
-    print('Token Expiry: ${await _secureStorage.read(key: _tokenExpiryKey)}');
+    final token = await _read(_tokenKey);
+    final refreshToken = await _read(_refreshTokenKey);
+    final tokenExpiry = await _read(_tokenExpiryKey);
+    final refreshExpiry = await _read(_refreshTokenExpiryKey);
+    final userRole = await _read(_userRoleKey);
+    final userId = await _read(_userIdKey);
+
     print(
-      'Refresh Expiry: ${await _secureStorage.read(key: _refreshTokenExpiryKey)}',
+      'Token: ${token != null ? '${token.substring(0, min(20, token.length))}...' : 'null'}',
     );
-    print('User Role: ${await _secureStorage.read(key: _userRoleKey)}');
-    print('User ID: ${await _secureStorage.read(key: _userIdKey)}');
+    print(
+      'Refresh Token: ${refreshToken != null ? '${refreshToken.substring(0, min(20, refreshToken.length))}...' : 'null'}',
+    );
+    print('Token Expiry: $tokenExpiry');
+    print('Refresh Expiry: $refreshExpiry');
+    print('User Role: $userRole');
+    print('User ID: $userId');
+
     print('======================');
   }
 
+  // Добавьте вспомогательную функцию min если её нет
+  static int min(int a, int b) => a < b ? a : b;
+
   // Сохранение роли пользователя
   static Future<void> saveUserRole(String role) async {
-    try {
-      await _secureStorage.write(key: _userRoleKey, value: role);
-    } catch (e) {
-      print('Ошибка сохранения роли: $e');
-    }
+    await _write(_userRoleKey, role);
   }
 
   // Получение роли пользователя
   static Future<String?> getUserRole() async {
-    try {
-      return await _secureStorage.read(key: _userRoleKey);
-    } catch (e) {
-      print('Ошибка получения роли: $e');
-      return null;
-    }
+    return await _read(_userRoleKey);
   }
 
   // Очистка всех данных авторизации
   static Future<void> clearAuthData() async {
-    try {
-      await _secureStorage.delete(key: _tokenKey);
-      await _secureStorage.delete(key: _refreshTokenKey);
-      await _secureStorage.delete(key: _tokenExpiryKey);
-      await _secureStorage.delete(key: _refreshTokenExpiryKey);
-      await _secureStorage.delete(key: _userRoleKey);
-      await _secureStorage.delete(key: _userIdKey);
-      print('✅ Данные авторизации очищены');
-    } catch (e) {
-      print('Ошибка очистки данных: $e');
-    }
+    await _delete(_tokenKey);
+    await _delete(_refreshTokenKey);
+    await _delete(_tokenExpiryKey);
+    await _delete(_refreshTokenExpiryKey);
+    await _delete(_userRoleKey);
+    await _delete(_userIdKey);
+    print('✅ Данные авторизации очищены');
   }
 
   // Получение access токена
   static Future<String?> getToken() async {
-    try {
-      return await _secureStorage.read(key: _tokenKey);
-    } catch (e) {
-      return null;
-    }
+    return await _read(_tokenKey);
   }
 
   // Получение refresh токена
   static Future<String?> getRefreshToken() async {
-    try {
-      return await _secureStorage.read(key: _refreshTokenKey);
-    } catch (e) {
-      return null;
-    }
+    return await _read(_refreshTokenKey);
   }
 
   // Получение ID пользователя из профиля
@@ -220,7 +280,7 @@ class AuthService {
       if (profile['data'] != null) {
         final userId = profile['data']['id']?.toString();
         if (userId != null) {
-          await _secureStorage.write(key: _userIdKey, value: userId);
+          await _write(_userIdKey, userId);
         }
         return userId;
       }
@@ -233,17 +293,13 @@ class AuthService {
 
   // Получение сохраненного ID пользователя
   static Future<String?> getStoredUserId() async {
-    try {
-      return await _secureStorage.read(key: _userIdKey);
-    } catch (e) {
-      return null;
-    }
+    return await _read(_userIdKey);
   }
 
   // Проверка валидности access токена
   static Future<bool> isTokenValid() async {
     try {
-      final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
+      final expiryStr = await _read(_tokenExpiryKey);
       if (expiryStr == null) return false;
 
       final expiry = int.tryParse(expiryStr);
@@ -259,7 +315,7 @@ class AuthService {
   // Проверка валидности refresh токена
   static Future<bool> isRefreshTokenValid() async {
     try {
-      final expiryStr = await _secureStorage.read(key: _refreshTokenExpiryKey);
+      final expiryStr = await _read(_refreshTokenExpiryKey);
       if (expiryStr == null) return false;
 
       final expiry = int.tryParse(expiryStr);
@@ -275,7 +331,7 @@ class AuthService {
   // Получение времени до истечения access токена (в секундах)
   static Future<int?> getTokenTimeToLive() async {
     try {
-      final expiryStr = await _secureStorage.read(key: _tokenExpiryKey);
+      final expiryStr = await _read(_tokenExpiryKey);
       if (expiryStr == null) return null;
 
       final expiry = int.tryParse(expiryStr);

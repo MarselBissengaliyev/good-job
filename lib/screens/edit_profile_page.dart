@@ -13,6 +13,9 @@ import 'package:provider/provider.dart';
 import '../localization/app_localizations.dart';
 import '../providers/language_provider.dart';
 import '../services/api_service.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
 
 class VerificationModal extends StatefulWidget {
   final String phoneNumber;
@@ -25,7 +28,10 @@ class VerificationModal extends StatefulWidget {
 }
 
 class _VerificationModalState extends State<VerificationModal> {
-  final List<TextEditingController> _controllers = List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _controllers = List.generate(
+    4,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
 
   Timer? _timer;
@@ -260,7 +266,11 @@ class _VerificationModalState extends State<VerificationModal> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.refresh_rounded, color: Color(0xFF0F7EDE), size: 20),
+            const Icon(
+              Icons.refresh_rounded,
+              color: Color(0xFF0F7EDE),
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
               appLocalizations.translate('resend_code'),
@@ -336,7 +346,8 @@ class EditProfilePage extends StatefulWidget {
   State<EditProfilePage> createState() => _EditProfilePageState();
 }
 
-class _EditProfilePageState extends State<EditProfilePage> with SingleTickerProviderStateMixin {
+class _EditProfilePageState extends State<EditProfilePage>
+    with SingleTickerProviderStateMixin {
   // Контроллеры полей
   late final TextEditingController _nameController;
   late final TextEditingController _surnameController;
@@ -475,71 +486,76 @@ class _EditProfilePageState extends State<EditProfilePage> with SingleTickerProv
     );
   }
 
-// Убираем использование AppLocalizations из _loadInitialData
-Future<void> _loadInitialData() async {
-  try {
-    final citiesData = await ApiService.getCities();
-    final profileData = await ApiService.getProfile();
-    final user = profileData['data'];
-    _userData = user;
-    final categoriesData = await ApiService.getCategories();
+  // Убираем использование AppLocalizations из _loadInitialData
+  Future<void> _loadInitialData() async {
+    try {
+      final citiesData = await ApiService.getCities();
+      final profileData = await ApiService.getProfile();
+      final user = profileData['data'];
+      _userData = user;
+      final categoriesData = await ApiService.getCategories();
 
-    final activeMode = user['activeMode'] ?? 'client';
-    final currentMode = activeMode == 'master' ? ProfileMode.master : ProfileMode.client;
+      final activeMode = user['activeMode'] ?? 'client';
+      final currentMode = activeMode == 'master'
+          ? ProfileMode.master
+          : ProfileMode.client;
 
-    List<int> categoryIds = [];
-    if (currentMode == ProfileMode.master && user['categories'] != null) {
-      final categoriesList = user['categories'] as List;
-      if (categoriesList.isNotEmpty && categoriesList.first is Map) {
-        categoryIds = categoriesList.map((cat) => cat['id'] as int).toList();
+      List<int> categoryIds = [];
+      if (currentMode == ProfileMode.master && user['categories'] != null) {
+        final categoriesList = user['categories'] as List;
+        if (categoriesList.isNotEmpty && categoriesList.first is Map) {
+          categoryIds = categoriesList.map((cat) => cat['id'] as int).toList();
+        }
+      }
+
+      String formattedPhone = _formatPhone(user['telephone'] ?? '');
+
+      _originalData = _EditableProfileData(
+        firstname: user['firstname'] ?? '',
+        lastname: user['lastname'] ?? '',
+        patronymic: user['patronymic'] ?? '',
+        cityId: user['city']['id'],
+        selectedMode: currentMode,
+        categoryIds: categoryIds,
+        instagram: user['instUsername'] ?? '',
+        tiktok: user['ttUsername'] ?? '',
+        phone: formattedPhone,
+      );
+
+      _editableData = _originalData.copyWith();
+
+      // Проверяем, что виджет еще активен перед обновлением состояния
+      if (mounted) {
+        setState(() {
+          _cities = citiesData;
+          _categories = categoriesData;
+          _currentProfileMode = currentMode;
+          _selectedCityId = user['city']['id'];
+          _avatarUrl = user['avatar'];
+          _isLoading = false;
+        });
+
+        _updateControllersFromEditableData();
+      }
+    } catch (e) {
+      print('[ERROR] Error loading data: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // Показываем ошибку через SnackBar, но без использования AppLocalizations
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка загрузки данных: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
       }
     }
-
-    String formattedPhone = _formatPhone(user['telephone'] ?? '');
-
-    _originalData = _EditableProfileData(
-      firstname: user['firstname'] ?? '',
-      lastname: user['lastname'] ?? '',
-      patronymic: user['patronymic'] ?? '',
-      cityId: user['city']['id'],
-      selectedMode: currentMode,
-      categoryIds: categoryIds,
-      instagram: user['instUsername'] ?? '',
-      tiktok: user['ttUsername'] ?? '',
-      phone: formattedPhone,
-    );
-
-    _editableData = _originalData.copyWith();
-
-    // Проверяем, что виджет еще активен перед обновлением состояния
-    if (mounted) {
-      setState(() {
-        _cities = citiesData;
-        _categories = categoriesData;
-        _currentProfileMode = currentMode;
-        _selectedCityId = user['city']['id'];
-        _avatarUrl = user['avatar'];
-        _isLoading = false;
-      });
-      
-      _updateControllersFromEditableData();
-    }
-  } catch (e) {
-    print('[ERROR] Error loading data: $e');
-    if (mounted) {
-      setState(() => _isLoading = false);
-      // Показываем ошибку через SnackBar, но без использования AppLocalizations
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка загрузки данных: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    }
   }
-}
+
   String _formatPhone(String phone) {
     if (phone.isEmpty) return '';
     String cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
@@ -564,7 +580,10 @@ Future<void> _loadInitialData() async {
         (_editableData.selectedMode == ProfileMode.master &&
             (_editableData.instagram != _originalData.instagram ||
                 _editableData.tiktok != _originalData.tiktok ||
-                !_listsAreEqual(_editableData.categoryIds, _originalData.categoryIds)));
+                !_listsAreEqual(
+                  _editableData.categoryIds,
+                  _originalData.categoryIds,
+                )));
   }
 
   bool _listsAreEqual(List<int>? list1, List<int>? list2) {
@@ -578,7 +597,9 @@ Future<void> _loadInitialData() async {
     final appLocalizations = AppLocalizations.of(context)!;
     _updateEditableDataFromControllers();
 
-    if (_editableData.firstname.isEmpty || _editableData.lastname.isEmpty || _editableData.cityId == null) {
+    if (_editableData.firstname.isEmpty ||
+        _editableData.lastname.isEmpty ||
+        _editableData.cityId == null) {
       _showErrorSnackBar(appLocalizations.translate('fill_required_fields'));
       return;
     }
@@ -589,12 +610,22 @@ Future<void> _loadInitialData() async {
       await ApiService.updateProfile(
         firstname: _editableData.firstname.trim(),
         lastname: _editableData.lastname.trim(),
-        patronymic: _editableData.patronymic.trim().isEmpty ? null : _editableData.patronymic.trim(),
+        patronymic: _editableData.patronymic.trim().isEmpty
+            ? null
+            : _editableData.patronymic.trim(),
         cityId: _editableData.cityId!,
-        activeMode: _editableData.selectedMode == ProfileMode.master ? 'master' : 'client',
-        categoryIds: _editableData.selectedMode == ProfileMode.master ? _editableData.categoryIds : [],
-        instUsername: _editableData.selectedMode == ProfileMode.master ? _editableData.instagram.trim() : null,
-        ttUsername: _editableData.selectedMode == ProfileMode.master ? _editableData.tiktok.trim() : null,
+        activeMode: _editableData.selectedMode == ProfileMode.master
+            ? 'master'
+            : 'client',
+        categoryIds: _editableData.selectedMode == ProfileMode.master
+            ? _editableData.categoryIds
+            : [],
+        instUsername: _editableData.selectedMode == ProfileMode.master
+            ? _editableData.instagram.trim()
+            : null,
+        ttUsername: _editableData.selectedMode == ProfileMode.master
+            ? _editableData.tiktok.trim()
+            : null,
       );
 
       if (_editableData.selectedMode == ProfileMode.master) {
@@ -615,23 +646,32 @@ Future<void> _loadInitialData() async {
         _navigateBack();
       }
     } catch (e) {
-      _showErrorSnackBar('${appLocalizations.translate('error_updating_profile')}: $e');
+      _showErrorSnackBar(
+        '${appLocalizations.translate('error_updating_profile')}: $e',
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
   Future<void> _updateMasterProfileIfNeeded() async {
-    final masterDataChanged = _editableData.instagram != _originalData.instagram ||
+    final masterDataChanged =
+        _editableData.instagram != _originalData.instagram ||
         _editableData.tiktok != _originalData.tiktok ||
         !_listsAreEqual(_editableData.categoryIds, _originalData.categoryIds);
 
     if (masterDataChanged) {
       try {
         await ApiService.updateMasterProfile(
-          categories: _editableData.categoryIds.isNotEmpty ? _editableData.categoryIds : null,
-          ttUsername: _editableData.tiktok.trim().isEmpty ? null : _editableData.tiktok.trim(),
-          instUsername: _editableData.instagram.trim().isEmpty ? null : _editableData.instagram.trim(),
+          categories: _editableData.categoryIds.isNotEmpty
+              ? _editableData.categoryIds
+              : null,
+          ttUsername: _editableData.tiktok.trim().isEmpty
+              ? null
+              : _editableData.tiktok.trim(),
+          instUsername: _editableData.instagram.trim().isEmpty
+              ? null
+              : _editableData.instagram.trim(),
         );
       } catch (e) {
         print('⚠️ Error updating master profile: $e');
@@ -643,7 +683,9 @@ Future<void> _loadInitialData() async {
     try {
       final profileData = await ApiService.getProfile();
       final currentPhone = profileData['data']['telephone'] ?? '';
-      return newPhone.isNotEmpty && newPhone.length >= 10 && newPhone != currentPhone;
+      return newPhone.isNotEmpty &&
+          newPhone.length >= 10 &&
+          newPhone != currentPhone;
     } catch (e) {
       return false;
     }
@@ -669,7 +711,9 @@ Future<void> _loadInitialData() async {
       if (e.toString().contains('Code already sent')) {
         await _showVerificationModalDirectly();
       } else {
-        _showErrorSnackBar('${appLocalizations.translate('error_sending_code')}: $e');
+        _showErrorSnackBar(
+          '${appLocalizations.translate('error_sending_code')}: $e',
+        );
       }
     }
   }
@@ -690,14 +734,22 @@ Future<void> _loadInitialData() async {
     }
   }
 
-  Future<void> _confirmNewPhone(String code, AppLocalizations appLocalizations) async {
+  Future<void> _confirmNewPhone(
+    String code,
+    AppLocalizations appLocalizations,
+  ) async {
     try {
-      await ApiService.confirmNewTelephone(telephone: _newPhoneNumber!, code: code);
+      await ApiService.confirmNewTelephone(
+        telephone: _newPhoneNumber!,
+        code: code,
+      );
       _showSuccessSnackBar(appLocalizations.translate('phone_verified'));
       _updateControllersFromEditableData();
     } catch (e) {
       if (e.toString().contains('500') || e.toString().contains('422')) {
-        _showInfoSnackBar(appLocalizations.translate('phone_sent_for_verification'));
+        _showInfoSnackBar(
+          appLocalizations.translate('phone_sent_for_verification'),
+        );
       } else {
         _showErrorSnackBar(appLocalizations.translate('invalid_code'));
         if (mounted) await _showVerificationModalDirectly();
@@ -723,10 +775,14 @@ Future<void> _loadInitialData() async {
     } else {
       Navigator.pushReplacementNamed(
         context,
-        _currentProfileMode == ProfileMode.master ? '/account-master' : '/account-client',
+        _currentProfileMode == ProfileMode.master
+            ? '/account-master'
+            : '/account-client',
       );
     }
   }
+
+  // В edit_profile_page.dart измените только метод _pickImage и _buildAvatarSection
 
   Future<void> _pickImage(ImageSource source) async {
     final appLocalizations = AppLocalizations.of(context)!;
@@ -740,11 +796,63 @@ Future<void> _loadInitialData() async {
       );
 
       if (image != null && mounted) {
-        setState(() => _avatarImage = File(image.path));
-        await _uploadAvatar();
+        if (kIsWeb) {
+          // Для Web - сохраняем XFile напрямую
+          setState(() => _avatarImageFile = image);
+          await _uploadAvatarWeb();
+        } else {
+          // Для мобильных - конвертируем в File
+          setState(() => _avatarImage = File(image.path));
+          await _uploadAvatar();
+        }
       }
     } catch (e) {
-      _showErrorSnackBar('${appLocalizations.translate('error_picking_image')}: $e');
+      _showErrorSnackBar(
+        '${appLocalizations.translate('error_picking_image')}: $e',
+      );
+    }
+  }
+
+  // Добавьте новую переменную в класс
+  XFile? _avatarImageFile; // Для Web
+
+  Future<void> _uploadAvatarWeb() async {
+    final appLocalizations = AppLocalizations.of(context)!;
+    if (_avatarImageFile == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+
+    try {
+      // Для Web нужно использовать специальный подход
+      // Создаем MultipartFile из XFile для Web
+      final bytes = await _avatarImageFile!.readAsBytes();
+      final fileName = _avatarImageFile!.name;
+
+      // Используем FormData для отправки
+      final formData = FormData.fromMap({
+        'image': MultipartFile.fromBytes(bytes, filename: fileName),
+      });
+
+      // Здесь нужно использовать ваш Dio клиент для отправки
+      // Если у вас нет прямого доступа к Dio, добавьте метод в ApiService
+      final response = await ApiService.uploadAvatarWeb(formData);
+
+      if (mounted) {
+        setState(() {
+          _avatarUrl = response['data']?['avatar'];
+          _isUploadingAvatar = false;
+          _avatarImageFile = null;
+        });
+        _showSuccessSnackBar(appLocalizations.translate('avatar_updated'));
+        await _loadInitialData();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+        _showErrorSnackBar(
+          '${appLocalizations.translate('error_uploading_avatar')}: $e',
+        );
+      }
     }
   }
 
@@ -760,6 +868,7 @@ Future<void> _loadInitialData() async {
         setState(() {
           _avatarUrl = response['data']?['avatar'];
           _isUploadingAvatar = false;
+          _avatarImage = null;
         });
         _showSuccessSnackBar(appLocalizations.translate('avatar_updated'));
         await _loadInitialData();
@@ -767,14 +876,150 @@ Future<void> _loadInitialData() async {
     } catch (e) {
       if (mounted) {
         setState(() => _isUploadingAvatar = false);
-        _showErrorSnackBar('${appLocalizations.translate('error_uploading_avatar')}: $e');
+        _showErrorSnackBar(
+          '${appLocalizations.translate('error_uploading_avatar')}: $e',
+        );
       }
     }
   }
 
-  void _showSuccessSnackBar(String message) => _showSnackBar(message, const Color(0xFF4CAF50));
-  void _showErrorSnackBar(String message) => _showSnackBar(message, const Color(0xFFE53935));
-  void _showInfoSnackBar(String message) => _showSnackBar(message, const Color(0xFF2196F3));
+  Widget _buildAvatarSection(AppLocalizations appLocalizations) {
+    return Center(
+      child: Stack(
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF96C5EB), Color(0xFF0F7EDE)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F7EDE).withOpacity(0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: _isUploadingAvatar
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                        strokeWidth: 3,
+                      ),
+                    )
+                  : _getAvatarImage(),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _isUploadingAvatar
+                  ? null
+                  : () => _showImageSourceDialog(appLocalizations),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F7EDE),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _getAvatarImage() {
+    if (kIsWeb) {
+      // Для Web - используем XFile или network
+      if (_avatarImageFile != null) {
+        return FutureBuilder<Uint8List?>(
+          future: _avatarImageFile!.readAsBytes(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data != null) {
+              return Image.memory(
+                snapshot.data!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+              );
+            }
+            return Container(color: Colors.grey[200]);
+          },
+        );
+      } else if (_avatarUrl != null && _avatarUrl!.isNotEmpty) {
+        // Важно: проверьте правильный URL для аватаров
+        final avatarPath = _avatarUrl!.startsWith('http')
+            ? _avatarUrl!
+            : 'https://good-job.kz/storage/${_avatarUrl!.replaceFirst('storage/', '')}';
+        return Image.network(
+          avatarPath,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading avatar: $error');
+            return const Icon(Icons.person, size: 60, color: Colors.white);
+          },
+        );
+      } else {
+        return const Icon(Icons.person, size: 60, color: Colors.white);
+      }
+    } else {
+      // Для мобильных - используем File
+      if (_avatarImage != null) {
+        return Image.file(
+          _avatarImage!,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+        );
+      } else if (_avatarUrl != null && _avatarUrl!.isNotEmpty) {
+        final avatarPath = _avatarUrl!.startsWith('http')
+            ? _avatarUrl!
+            : 'https://good-job.kz/storage/${_avatarUrl!.replaceFirst('storage/', '')}';
+        return Image.network(
+          avatarPath,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading avatar: $error');
+            return const Icon(Icons.person, size: 60, color: Colors.white);
+          },
+        );
+      } else {
+        return const Icon(Icons.person, size: 60, color: Colors.white);
+      }
+    }
+  }
+
+  void _showSuccessSnackBar(String message) =>
+      _showSnackBar(message, const Color(0xFF4CAF50));
+  void _showErrorSnackBar(String message) =>
+      _showSnackBar(message, const Color(0xFFE53935));
+  void _showInfoSnackBar(String message) =>
+      _showSnackBar(message, const Color(0xFF2196F3));
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -795,7 +1040,9 @@ Future<void> _loadInitialData() async {
         final categories = await ApiService.getCategories();
         setState(() => _categories = categories);
       } catch (e) {
-        _showErrorSnackBar(appLocalizations.translate('error_loading_categories'));
+        _showErrorSnackBar(
+          appLocalizations.translate('error_loading_categories'),
+        );
         return;
       }
     }
@@ -808,7 +1055,9 @@ Future<void> _loadInitialData() async {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
               child: Container(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -826,7 +1075,10 @@ Future<void> _loadInitialData() async {
                     const SizedBox(height: 8),
                     Text(
                       appLocalizations.translate('select_multiple_categories'),
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF5F6368)),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF5F6368),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Container(
@@ -836,10 +1088,13 @@ Future<void> _loadInitialData() async {
                       child: ListView.separated(
                         shrinkWrap: true,
                         itemCount: _categories.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFE8E8E8)),
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1, color: Color(0xFFE8E8E8)),
                         itemBuilder: (context, index) {
                           final category = _categories[index];
-                          final isSelected = tempSelectedIds.contains(category['id']);
+                          final isSelected = tempSelectedIds.contains(
+                            category['id'],
+                          );
                           return InkWell(
                             onTap: () {
                               setStateDialog(() {
@@ -851,7 +1106,10 @@ Future<void> _loadInitialData() async {
                               });
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 8,
+                              ),
                               child: Row(
                                 children: [
                                   Container(
@@ -859,13 +1117,23 @@ Future<void> _loadInitialData() async {
                                     height: 24,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: isSelected ? const Color(0xFF0F7EDE) : Colors.transparent,
+                                      color: isSelected
+                                          ? const Color(0xFF0F7EDE)
+                                          : Colors.transparent,
                                       border: Border.all(
-                                        color: isSelected ? const Color(0xFF0F7EDE) : const Color(0xFF8A8D90),
+                                        color: isSelected
+                                            ? const Color(0xFF0F7EDE)
+                                            : const Color(0xFF8A8D90),
                                         width: 2,
                                       ),
                                     ),
-                                    child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
+                                    child: isSelected
+                                        ? const Icon(
+                                            Icons.check,
+                                            color: Colors.white,
+                                            size: 16,
+                                          )
+                                        : null,
                                   ),
                                   const SizedBox(width: 16),
                                   Expanded(
@@ -873,8 +1141,12 @@ Future<void> _loadInitialData() async {
                                       category['name'],
                                       style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                        color: isSelected ? const Color(0xFF0F7EDE) : const Color(0xFF1D2125),
+                                        fontWeight: isSelected
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                        color: isSelected
+                                            ? const Color(0xFF0F7EDE)
+                                            : const Color(0xFF1D2125),
                                       ),
                                     ),
                                   ),
@@ -893,12 +1165,17 @@ Future<void> _loadInitialData() async {
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               side: const BorderSide(color: Color(0xFFE0E0E0)),
                             ),
                             child: Text(
                               appLocalizations.translate('cancel'),
-                              style: const TextStyle(color: Color(0xFF5F6368), fontSize: 16),
+                              style: const TextStyle(
+                                color: Color(0xFF5F6368),
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -907,19 +1184,29 @@ Future<void> _loadInitialData() async {
                           child: ElevatedButton(
                             onPressed: () {
                               setState(() {
-                                _selectedCategoryIds = List.from(tempSelectedIds);
-                                _editableData = _editableData.copyWith(categoryIds: List.from(tempSelectedIds));
+                                _selectedCategoryIds = List.from(
+                                  tempSelectedIds,
+                                );
+                                _editableData = _editableData.copyWith(
+                                  categoryIds: List.from(tempSelectedIds),
+                                );
                               });
                               Navigator.pop(context);
                             },
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               backgroundColor: const Color(0xFF0F7EDE),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                             child: Text(
                               appLocalizations.translate('done'),
-                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -964,7 +1251,11 @@ Future<void> _loadInitialData() async {
                 color: const Color(0xFFF5F5F5),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF41454A), size: 20),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Color(0xFF41454A),
+                size: 20,
+              ),
             ),
             onPressed: _navigateBack,
           ),
@@ -982,7 +1273,8 @@ Future<void> _loadInitialData() async {
             IconButton(
               onPressed: () async {
                 await AuthService.clearAuthData();
-                if (mounted) Navigator.pushReplacementNamed(context, '/registration');
+                if (mounted)
+                  Navigator.pushReplacementNamed(context, '/registration');
               },
               icon: Image.asset('assets/logout.png', width: 22, height: 22),
             ),
@@ -994,7 +1286,10 @@ Future<void> _loadInitialData() async {
             children: [
               SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1002,35 +1297,66 @@ Future<void> _loadInitialData() async {
                     const SizedBox(height: 20),
                     _buildModeSwitcher(appLocalizations),
                     const SizedBox(height: 32),
-                    _buildSectionHeader(appLocalizations.translate('basic_info')),
+                    _buildSectionHeader(
+                      appLocalizations.translate('basic_info'),
+                    ),
                     const SizedBox(height: 16),
-                    _buildInputField(appLocalizations.translate('first_name'), _nameController, Icons.person_outline),
+                    _buildInputField(
+                      appLocalizations.translate('first_name'),
+                      _nameController,
+                      Icons.person_outline,
+                    ),
                     const SizedBox(height: 12),
-                    _buildInputField(appLocalizations.translate('last_name'), _surnameController, Icons.person_outline),
+                    _buildInputField(
+                      appLocalizations.translate('last_name'),
+                      _surnameController,
+                      Icons.person_outline,
+                    ),
                     const SizedBox(height: 12),
-                    _buildInputField(appLocalizations.translate('patronymic'), _patronymicController, Icons.person_outline),
+                    _buildInputField(
+                      appLocalizations.translate('patronymic'),
+                      _patronymicController,
+                      Icons.person_outline,
+                    ),
                     const SizedBox(height: 16),
                     _buildCityDropdown(appLocalizations),
                     _buildCategoriesSection(appLocalizations),
                     const SizedBox(height: 32),
-                    _buildSectionHeader(appLocalizations.translate('contact_info')),
+                    _buildSectionHeader(
+                      appLocalizations.translate('contact_info'),
+                    ),
                     const SizedBox(height: 16),
                     _buildPhoneField(appLocalizations),
-                           const SizedBox(height: 32),
+                    const SizedBox(height: 32),
                     if (_editableData.selectedMode == ProfileMode.master) ...[
                       const SizedBox(height: 24),
-                      _buildSectionHeader(appLocalizations.translate('social_media')),
+                      _buildSectionHeader(
+                        appLocalizations.translate('social_media'),
+                      ),
                       const SizedBox(height: 16),
-                      _buildSocialField('Instagram', _instagramController, 'assets/instagram.png', Icons.alternate_email),
+                      _buildSocialField(
+                        'Instagram',
+                        _instagramController,
+                        'assets/instagram.png',
+                        Icons.alternate_email,
+                      ),
                       const SizedBox(height: 12),
-                      _buildSocialField('TikTok', _tiktokController, 'assets/tiktok.png', Icons.music_note),
+                      _buildSocialField(
+                        'TikTok',
+                        _tiktokController,
+                        'assets/tiktok.png',
+                        Icons.music_note,
+                      ),
                       const SizedBox(height: 12),
-                      _buildInfoHint(appLocalizations.translate('username_without_at')),
-                             const SizedBox(height: 32),
+                      _buildInfoHint(
+                        appLocalizations.translate('username_without_at'),
+                      ),
+                      const SizedBox(height: 32),
                     ],
                     _buildSaveButton(appLocalizations),
                     const SizedBox(height: 12),
-                    if (_editableData.selectedMode == ProfileMode.master) _buildPortfolioButton(appLocalizations),
+                    if (_editableData.selectedMode == ProfileMode.master)
+                      _buildPortfolioButton(appLocalizations),
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -1064,7 +1390,9 @@ Future<void> _loadInitialData() async {
             ),
             child: CustomBottomNavBar(
               activeItem: NavItem.account,
-              accountType: _currentProfileMode == ProfileMode.master ? AccountType.master : AccountType.client,
+              accountType: _currentProfileMode == ProfileMode.master
+                  ? AccountType.master
+                  : AccountType.client,
             ),
           ),
         ),
@@ -1072,7 +1400,11 @@ Future<void> _loadInitialData() async {
     );
   }
 
-  Widget _buildLanguageButton(BuildContext context, LanguageProvider languageProvider, AppLocalizations appLocalizations) {
+  Widget _buildLanguageButton(
+    BuildContext context,
+    LanguageProvider languageProvider,
+    AppLocalizations appLocalizations,
+  ) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
@@ -1082,21 +1414,43 @@ Future<void> _loadInitialData() async {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildLanguageOption('RU', const Locale('ru'), languageProvider.locale.languageCode == 'ru', languageProvider, context),
-          _buildLanguageOption('KZ', const Locale('kk'), languageProvider.locale.languageCode == 'kk', languageProvider, context),
+          _buildLanguageOption(
+            'RU',
+            const Locale('ru'),
+            languageProvider.locale.languageCode == 'ru',
+            languageProvider,
+            context,
+          ),
+          _buildLanguageOption(
+            'KZ',
+            const Locale('kk'),
+            languageProvider.locale.languageCode == 'kk',
+            languageProvider,
+            context,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLanguageOption(String code, Locale locale, bool isActive, LanguageProvider provider, BuildContext context) {
+  Widget _buildLanguageOption(
+    String code,
+    Locale locale,
+    bool isActive,
+    LanguageProvider provider,
+    BuildContext context,
+  ) {
     final appLocalizations = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: () {
         provider.setLanguage(locale);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(locale.languageCode == 'ru' ? 'Язык изменен на русский' : 'Тіл қазақшаға өзгертілді'),
+            content: Text(
+              locale.languageCode == 'ru'
+                  ? 'Язык изменен на русский'
+                  : 'Тіл қазақшаға өзгертілді',
+            ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 1),
             behavior: SnackBarBehavior.floating,
@@ -1155,65 +1509,13 @@ Future<void> _loadInitialData() async {
     );
   }
 
-  Widget _buildAvatarSection(AppLocalizations appLocalizations) {
-    return Center(
-      child: Stack(
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF96C5EB), Color(0xFF0F7EDE)],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F7EDE).withOpacity(0.2),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: _isUploadingAvatar
-                  ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Colors.white), strokeWidth: 3))
-                  : _avatarImage != null
-                  ? Image.file(_avatarImage!, fit: BoxFit.cover)
-                  : (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                  ? Image.network('https://good-job.kz/storage/$_avatarUrl', fit: BoxFit.cover)
-                  : const Icon(Icons.person, size: 60, color: Colors.white),
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: GestureDetector(
-              onTap: _isUploadingAvatar ? null : () => _showImageSourceDialog(appLocalizations),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F7EDE),
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
-                ),
-                child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _showImageSourceDialog(AppLocalizations appLocalizations) async {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -1223,22 +1525,42 @@ Future<void> _loadInitialData() async {
               children: [
                 Text(
                   appLocalizations.translate('select_source'),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF1D2125)),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1D2125),
+                  ),
                 ),
                 const SizedBox(height: 20),
-                _buildImageSourceTile(Icons.camera_alt_rounded, appLocalizations.translate('take_photo'), 
-                    appLocalizations.translate('use_camera'), () => _pickImage(ImageSource.camera)),
+                _buildImageSourceTile(
+                  Icons.camera_alt_rounded,
+                  appLocalizations.translate('take_photo'),
+                  appLocalizations.translate('use_camera'),
+                  () => _pickImage(ImageSource.camera),
+                ),
                 const SizedBox(height: 8),
-                _buildImageSourceTile(Icons.photo_library_rounded, appLocalizations.translate('choose_from_gallery'),
-                    appLocalizations.translate('select_existing_photo'), () => _pickImage(ImageSource.gallery)),
+                _buildImageSourceTile(
+                  Icons.photo_library_rounded,
+                  appLocalizations.translate('choose_from_gallery'),
+                  appLocalizations.translate('select_existing_photo'),
+                  () => _pickImage(ImageSource.gallery),
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFE53935)),
-                    child: Text(appLocalizations.translate('cancel'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFE53935),
+                    ),
+                    child: Text(
+                      appLocalizations.translate('cancel'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1249,19 +1571,42 @@ Future<void> _loadInitialData() async {
     );
   }
 
-  Widget _buildImageSourceTile(IconData icon, String title, String subtitle, VoidCallback onTap) {
+  Widget _buildImageSourceTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       leading: Container(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: title.contains('фото') ? const Color(0xFFE8F4FF) : const Color(0xFFF5F5F5),
+          color: title.contains('фото')
+              ? const Color(0xFFE8F4FF)
+              : const Color(0xFFF5F5F5),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: title.contains('фото') ? const Color(0xFF0F7EDE) : const Color(0xFF5F6368), size: 24),
+        child: Icon(
+          icon,
+          color: title.contains('фото')
+              ? const Color(0xFF0F7EDE)
+              : const Color(0xFF5F6368),
+          size: 24,
+        ),
       ),
-      title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF1D2125))),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 14, color: Color(0xFF8A8D90))),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF1D2125),
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF8A8D90)),
+      ),
       onTap: () {
         Navigator.pop(context);
         onTap();
@@ -1278,15 +1623,31 @@ Future<void> _loadInitialData() async {
       ),
       child: Row(
         children: [
-          Expanded(child: _buildModeButton(appLocalizations.translate('client'), ProfileMode.client, appLocalizations)),
+          Expanded(
+            child: _buildModeButton(
+              appLocalizations.translate('client'),
+              ProfileMode.client,
+              appLocalizations,
+            ),
+          ),
           const SizedBox(width: 4),
-          Expanded(child: _buildModeButton(appLocalizations.translate('master'), ProfileMode.master, appLocalizations)),
+          Expanded(
+            child: _buildModeButton(
+              appLocalizations.translate('master'),
+              ProfileMode.master,
+              appLocalizations,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildModeButton(String label, ProfileMode mode, AppLocalizations appLocalizations) {
+  Widget _buildModeButton(
+    String label,
+    ProfileMode mode,
+    AppLocalizations appLocalizations,
+  ) {
     bool isActive = _editableData.selectedMode == mode;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -1295,7 +1656,15 @@ Future<void> _loadInitialData() async {
       decoration: BoxDecoration(
         color: isActive ? Colors.white : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2))] : [],
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : [],
       ),
       child: Material(
         color: Colors.transparent,
@@ -1308,7 +1677,11 @@ Future<void> _loadInitialData() async {
                 _instagramController.clear();
                 _tiktokController.clear();
                 _selectedCategoryIds.clear();
-                _editableData = _editableData.copyWith(instagram: '', tiktok: '', categoryIds: []);
+                _editableData = _editableData.copyWith(
+                  instagram: '',
+                  tiktok: '',
+                  categoryIds: [],
+                );
               }
             });
           },
@@ -1318,7 +1691,9 @@ Future<void> _loadInitialData() async {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: isActive ? const Color(0xFF0F7EDE) : const Color(0xFF8A8D90),
+                color: isActive
+                    ? const Color(0xFF0F7EDE)
+                    : const Color(0xFF8A8D90),
               ),
             ),
           ),
@@ -1339,24 +1714,43 @@ Future<void> _loadInitialData() async {
     );
   }
 
-  Widget _buildInputField(String hint, TextEditingController controller, IconData icon) {
+  Widget _buildInputField(
+    String hint,
+    TextEditingController controller,
+    IconData icon,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8E8E8)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: TextField(
         controller: controller,
-        style: const TextStyle(fontSize: 16, color: Color(0xFF1D2125), fontWeight: FontWeight.w500),
+        style: const TextStyle(
+          fontSize: 16,
+          color: Color(0xFF1D2125),
+          fontWeight: FontWeight.w500,
+        ),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: Color(0xFF8A8D90)),
           prefixIcon: Icon(icon, color: const Color(0xFF8A8D90), size: 20),
-          suffixIcon: controller.text.isNotEmpty ? _buildClearButton(() => setState(() => controller.clear())) : null,
+          suffixIcon: controller.text.isNotEmpty
+              ? _buildClearButton(() => setState(() => controller.clear()))
+              : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 18,
+          ),
         ),
         onChanged: (_) => setState(() => _updateEditableDataFromControllers()),
       ),
@@ -1376,7 +1770,9 @@ Future<void> _loadInitialData() async {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFFE0E0E0)),
           ),
-          child: const Center(child: Icon(Icons.close, color: Color(0xFF9AA0A6), size: 18)),
+          child: const Center(
+            child: Icon(Icons.close, color: Color(0xFF9AA0A6), size: 18),
+          ),
         ),
       ),
     );
@@ -1390,21 +1786,48 @@ Future<void> _loadInitialData() async {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8E8E8)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.location_on_outlined, color: Color(0xFF8A8D90), size: 20),
+          const Icon(
+            Icons.location_on_outlined,
+            color: Color(0xFF8A8D90),
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 value: _selectedCityId,
                 isExpanded: true,
-                icon: const Icon(Icons.expand_more_rounded, color: Color(0xFF8A8D90)),
-                style: const TextStyle(fontSize: 16, color: Color(0xFF1D2125), fontWeight: FontWeight.w500),
-                hint: Text(appLocalizations.translate('select_city'), style: const TextStyle(color: Color(0xFF8A8D90))),
-                items: _cities.map((city) => DropdownMenuItem<int>(value: city['id'], child: Text(city['name']))).toList(),
+                icon: const Icon(
+                  Icons.expand_more_rounded,
+                  color: Color(0xFF8A8D90),
+                ),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF1D2125),
+                  fontWeight: FontWeight.w500,
+                ),
+                hint: Text(
+                  appLocalizations.translate('select_city'),
+                  style: const TextStyle(color: Color(0xFF8A8D90)),
+                ),
+                items: _cities
+                    .map(
+                      (city) => DropdownMenuItem<int>(
+                        value: city['id'],
+                        child: Text(city['name']),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (val) => setState(() {
                   _selectedCityId = val;
                   _updateEditableDataFromControllers();
@@ -1418,7 +1841,8 @@ Future<void> _loadInitialData() async {
   }
 
   Widget _buildCategoriesSection(AppLocalizations appLocalizations) {
-    if (_editableData.selectedMode != ProfileMode.master) return const SizedBox.shrink();
+    if (_editableData.selectedMode != ProfileMode.master)
+      return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1435,7 +1859,13 @@ Future<void> _loadInitialData() async {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE8E8E8)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -1445,23 +1875,35 @@ Future<void> _loadInitialData() async {
                     color: const Color(0xFFE8F4FF),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.category_outlined, color: Color(0xFF0F7EDE), size: 20),
+                  child: const Icon(
+                    Icons.category_outlined,
+                    color: Color(0xFF0F7EDE),
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(appLocalizations.translate('service_categories'), style: const TextStyle(fontSize: 14, color: Color(0xFF5F6368))),
+                      Text(
+                        appLocalizations.translate('service_categories'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF5F6368),
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
-                        _editableData.categoryIds.isEmpty 
+                        _editableData.categoryIds.isEmpty
                             ? appLocalizations.translate('not_selected')
                             : '${appLocalizations.translate('selected')}: ${_editableData.categoryIds.length}',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: _editableData.categoryIds.isEmpty ? const Color(0xFF8A8D90) : const Color(0xFF0F7EDE),
+                          color: _editableData.categoryIds.isEmpty
+                              ? const Color(0xFF8A8D90)
+                              : const Color(0xFF0F7EDE),
                         ),
                       ),
                     ],
@@ -1478,26 +1920,47 @@ Future<void> _loadInitialData() async {
             spacing: 8,
             runSpacing: 8,
             children: _editableData.categoryIds.map((id) {
-              final category = _categories.firstWhere((c) => c['id'] == id, orElse: () => {'name': 'Category $id'});
+              final category = _categories.firstWhere(
+                (c) => c['id'] == id,
+                orElse: () => {'name': 'Category $id'},
+              );
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8F4FF),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF0F7EDE).withOpacity(0.2)),
+                  border: Border.all(
+                    color: const Color(0xFF0F7EDE).withOpacity(0.2),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(category['name'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF0F7EDE))),
+                    Text(
+                      category['name'],
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0F7EDE),
+                      ),
+                    ),
                     const SizedBox(width: 4),
                     GestureDetector(
                       onTap: () => setState(() {
                         _editableData.categoryIds.remove(id);
                         _selectedCategoryIds.remove(id);
-                        _editableData = _editableData.copyWith(categoryIds: List.from(_editableData.categoryIds));
+                        _editableData = _editableData.copyWith(
+                          categoryIds: List.from(_editableData.categoryIds),
+                        );
                       }),
-                      child: const Icon(Icons.close, size: 16, color: Color(0xFF0F7EDE)),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Color(0xFF0F7EDE),
+                      ),
                     ),
                   ],
                 ),
@@ -1515,37 +1978,73 @@ Future<void> _loadInitialData() async {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8E8E8)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: TextField(
         controller: _phoneController,
         keyboardType: TextInputType.phone,
         inputFormatters: [maskFormatter],
-        style: const TextStyle(fontSize: 16, color: Color(0xFF1D2125), fontWeight: FontWeight.w500),
+        style: const TextStyle(
+          fontSize: 16,
+          color: Color(0xFF1D2125),
+          fontWeight: FontWeight.w500,
+        ),
         decoration: InputDecoration(
           hintText: '+7 (___) ___-__-__',
           hintStyle: const TextStyle(color: Color(0xFF8A8D90)),
-          prefixIcon: const Icon(Icons.phone_iphone_rounded, color: Color(0xFF8A8D90), size: 20),
-          suffixIcon: _phoneController.text.isNotEmpty ? _buildClearButton(() => setState(() => _phoneController.clear())) : null,
+          prefixIcon: const Icon(
+            Icons.phone_iphone_rounded,
+            color: Color(0xFF8A8D90),
+            size: 20,
+          ),
+          suffixIcon: _phoneController.text.isNotEmpty
+              ? _buildClearButton(
+                  () => setState(() => _phoneController.clear()),
+                )
+              : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 18,
+          ),
         ),
         onChanged: (_) => setState(() => _updateEditableDataFromControllers()),
       ),
     );
   }
 
-  Widget _buildSocialField(String label, TextEditingController controller, String assetPath, IconData fallbackIcon) {
+  Widget _buildSocialField(
+    String label,
+    TextEditingController controller,
+    String assetPath,
+    IconData fallbackIcon,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8E8E8)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: TextField(
         controller: controller,
-        style: const TextStyle(fontSize: 16, color: Color(0xFF1D2125), fontWeight: FontWeight.w500),
+        style: const TextStyle(
+          fontSize: 16,
+          color: Color(0xFF1D2125),
+          fontWeight: FontWeight.w500,
+        ),
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Color(0xFF8A8D90)),
@@ -1554,15 +2053,29 @@ Future<void> _loadInitialData() async {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset(assetPath, width: 24, height: 24, errorBuilder: (context, error, stackTrace) => Icon(fallbackIcon, size: 24)),
+                Image.asset(
+                  assetPath,
+                  width: 24,
+                  height: 24,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Icon(fallbackIcon, size: 24),
+                ),
                 const SizedBox(width: 4),
               ],
             ),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          suffixIcon: controller.text.isNotEmpty ? _buildClearButton(() => setState(() => controller.clear())) : null,
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 48,
+            minHeight: 48,
+          ),
+          suffixIcon: controller.text.isNotEmpty
+              ? _buildClearButton(() => setState(() => controller.clear()))
+              : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 18,
+          ),
         ),
         onChanged: (_) => setState(() => _updateEditableDataFromControllers()),
       ),
@@ -1580,7 +2093,12 @@ Future<void> _loadInitialData() async {
         children: [
           const Icon(Icons.info_outline, size: 16, color: Color(0xFF0F7EDE)),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368)))),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368)),
+            ),
+          ),
         ],
       ),
     );
@@ -1593,18 +2111,35 @@ Future<void> _loadInitialData() async {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _hasChanges && !_isSaving && isPhoneValid ? _updateProfile : null,
+        onPressed: _hasChanges && !_isSaving && isPhoneValid
+            ? _updateProfile
+            : null,
 
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 18),
           backgroundColor: const Color(0xFF0F7EDE),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           elevation: 0,
-          
         ),
         child: _isSaving
-            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
-            : Text(appLocalizations.translate('save_changes'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                ),
+              )
+            : Text(
+                appLocalizations.translate('save_changes'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
       ),
     );
   }
@@ -1613,14 +2148,28 @@ Future<void> _loadInitialData() async {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditPortfolioMasterPage())),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const EditPortfolioMasterPage(),
+          ),
+        ),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 18),
           side: const BorderSide(color: Color(0xFF0F7EDE), width: 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           backgroundColor: Colors.white,
         ),
-        child: Text(appLocalizations.translate('my_works'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0F7EDE))),
+        child: Text(
+          appLocalizations.translate('my_works'),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0F7EDE),
+          ),
+        ),
       ),
     );
   }

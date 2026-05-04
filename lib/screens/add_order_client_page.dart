@@ -1,5 +1,5 @@
+import 'dart:typed_data';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:goodjob/custom_bottom_navbar.dart';
@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:provider/provider.dart';
-
+import 'package:flutter/foundation.dart';
 import '../localization/app_localizations.dart';
 import '../providers/language_provider.dart';
 
@@ -21,7 +21,6 @@ class AddOrderClientPage extends StatefulWidget {
 }
 
 class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTickerProviderStateMixin {
-  // Контроллеры для полей ввода
   final TextEditingController _taskController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _districtController = TextEditingController();
@@ -36,7 +35,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
     type: MaskAutoCompletionType.lazy,
   );
 
-  List<File> _selectedImages = [];
+  List<XFile> _selectedImages = [];
   bool _isLoading = false;
   String? _selectedCategoryId;
   String? _selectedCityId;
@@ -75,28 +74,20 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
   @override
   void initState() {
     super.initState();
-    print('🚀 [AddOrderClientPage] initState STARTED');
-    
     _initAnimation();
-
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Color(0xFFFAFAFA),
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
     );
-    
-    print('✅ [AddOrderClientPage] initState FINISHED');
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
-    // Загружаем данные только один раз
     if (!_isInitialized) {
       _isInitialized = true;
-      print('🔄 [AddOrderClientPage] didChangeDependencies - загружаем данные');
       _loadCategories();
       _loadCities();
     }
@@ -119,75 +110,51 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
     _removeCategoryOverlay();
     _removeCityOverlay();
     _animationController.dispose();
-
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.black,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-
     super.dispose();
   }
 
   Future<void> _loadCategories() async {
     final appLocalizations = AppLocalizations.of(context);
-    
     if (!mounted) return;
     setState(() => _isLoadingCategories = true);
 
     try {
-      print('🟡 [UI] Начинаем загрузку категорий...');
       final categories = await ApiService.getCategories();
-      print('🟢 [UI] Загружено ${categories.length} категорий');
-      
       if (!mounted) return;
       setState(() => _categories = categories);
-      
       if (categories.isEmpty) {
-        print('⚠️ [UI] Список категорий пуст');
-        _showError(appLocalizations?.translate('categories_not_loaded') ?? 
-            'Категории не загружены. Проверьте подключение к интернету.');
+        _showError(appLocalizations?.translate('categories_not_loaded') ?? 'Категории не загружены');
       }
     } catch (e) {
-      print('🔴 [UI] Ошибка загрузки категорий: $e');
-      if (e is DioException) {
-        print('🔴 Тип ошибки: ${e.type}');
-        print('🔴 Статус: ${e.response?.statusCode}');
-        print('🔴 Ответ: ${e.response?.data}');
-      }
       if (mounted) {
         _showError('${appLocalizations?.translate('error_loading_categories') ?? 'Ошибка загрузки категорий'}: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingCategories = false);
-      }
+      if (mounted) setState(() => _isLoadingCategories = false);
     }
   }
 
   Future<void> _loadCities() async {
     final appLocalizations = AppLocalizations.of(context);
-    
     if (!mounted) return;
     setState(() => _isLoadingCities = true);
 
     try {
-      print('🟡 [UI] Начинаем загрузку городов...');
       final cities = await ApiService.getCities();
-      print('🟢 [UI] Загружено ${cities.length} городов');
-      
       if (!mounted) return;
       setState(() => _cities = cities);
     } catch (e) {
-      print('🔴 [UI] Ошибка загрузки городов: $e');
       if (mounted) {
         _showError('${appLocalizations?.translate('error_loading_cities') ?? 'Ошибка загрузки городов'}: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingCities = false);
-      }
+      if (mounted) setState(() => _isLoadingCities = false);
     }
   }
 
@@ -236,12 +203,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                     children: [
                       Text(
                         appLocalizations?.translate('category') ?? 'Категория',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
                       ),
                       const Spacer(),
                       GestureDetector(
@@ -341,12 +303,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                     children: [
                       Text(
                         appLocalizations?.translate('city') ?? 'Город',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
-                        ),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
                       ),
                       const Spacer(),
                       GestureDetector(
@@ -433,7 +390,6 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                 style: TextStyle(
                   fontSize: 14,
                   color: isSelected ? const Color(0xFF0F7EDE) : const Color(0xFF41454A),
-                  fontFamily: 'Plus Jakarta Sans',
                 ),
               ),
             ),
@@ -532,7 +488,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
       setState(() {
         for (var pickedFile in pickedFiles) {
           if (_selectedImages.length < 10) {
-            _selectedImages.add(File(pickedFile.path));
+            _selectedImages.add(pickedFile);
           } else {
             _showError(appLocalizations?.translate('max_images_error') ?? 'Максимум 10 изображений');
             break;
@@ -550,7 +506,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
     if (pickedFile != null) {
       setState(() {
         if (_selectedImages.length < 10) {
-          _selectedImages.add(File(pickedFile.path));
+          _selectedImages.add(pickedFile);
         } else {
           _showError(appLocalizations?.translate('max_images_error') ?? 'Максимум 10 изображений');
         }
@@ -618,7 +574,19 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
     try {
       List<String> uploadedImagePaths = [];
       if (_selectedImages.isNotEmpty) {
-        uploadedImagePaths = await ApiService.uploadOrderImages(_selectedImages);
+        // Конвертируем XFile в File для загрузки
+        List<File> imageFiles = [];
+        for (var xfile in _selectedImages) {
+          if (!kIsWeb) {
+            // На мобильных платформах
+            imageFiles.add(File(xfile.path));
+          } else {
+            // На Web - временное решение, нужно будет переделать API для приема XFile
+            // Пока покажем ошибку
+            throw Exception('Загрузка изображений на Web временно недоступна. Используйте мобильное приложение.');
+          }
+        }
+        uploadedImagePaths = await ApiService.uploadOrderImages(imageFiles);
       }
 
       String adressHouse = _houseController.text;
@@ -656,7 +624,6 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
       if (responseData is Map<String, dynamic>) {
         final message = responseData['message'];
         final errors = responseData['errors'];
-
         if (errors is Map<String, dynamic> && errors.isNotEmpty) {
           final buffer = StringBuffer();
           buffer.writeln('${appLocalizations?.translate('validation_error') ?? 'Ошибка валидации данных:'}');
@@ -750,7 +717,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
           ),
           title: Text(
             appLocalizations?.translate('add_order') ?? 'Добавить заказ',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Color(0xFF41454A)),
           ),
           actions: [
             _buildLanguageButton(context, languageProvider, appLocalizations),
@@ -775,7 +742,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                     children: [
                       Text(
                         appLocalizations?.translate('basic_info') ?? 'Основная информация',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
                       ),
                       const SizedBox(height: 16),
                       _buildTaskField(appLocalizations),
@@ -788,7 +755,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                       const SizedBox(height: 20),
                       Text(
                         appLocalizations?.translate('address') ?? 'Адрес',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
                       ),
                       const SizedBox(height: 12),
                       _buildCitySelector(appLocalizations),
@@ -799,7 +766,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                       const SizedBox(height: 20),
                       Text(
                         appLocalizations?.translate('contact_info') ?? 'Контактная информация',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
                       ),
                       const SizedBox(height: 12),
                       _buildPhoneField(appLocalizations),
@@ -897,14 +864,14 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: appLocalizations?.translate('what_to_do') ?? 'Что нужно выполнить?',
-            hintStyle: const TextStyle(fontSize: 17, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+            hintStyle: const TextStyle(fontSize: 17, color: Color(0xFFCBCDCE)),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             counterText: '',
           ),
-          style: const TextStyle(fontSize: 17, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+          style: const TextStyle(fontSize: 17, color: Color(0xFF41454A)),
         ),
         const SizedBox(height: 8),
         Row(
@@ -917,10 +884,9 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
               style: TextStyle(
                 fontSize: 12,
                 color: _taskController.text.length < 16 ? Colors.red : const Color(0xFF5F6368),
-                fontFamily: 'Plus Jakarta Sans',
               ),
             ),
-            Text('${_taskController.text.length}/70', style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368), fontFamily: 'Plus Jakarta Sans')),
+            Text('${_taskController.text.length}/70', style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
           ],
         ),
       ],
@@ -954,7 +920,6 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                         style: TextStyle(
                           fontSize: 16,
                           color: _selectedCategoryName == null ? const Color(0xFF5F6368) : const Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -980,11 +945,11 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
           children: [
             Text(
               appLocalizations?.translate('photos') ?? 'Фото',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
             ),
             Text(
               '${appLocalizations?.translate('can_upload') ?? 'Можно загрузить'} ${10 - _selectedImages.length} ${appLocalizations?.translate('photos') ?? 'фото'}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368), fontFamily: 'Plus Jakarta Sans'),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368)),
             ),
           ],
         ),
@@ -1025,7 +990,30 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(_selectedImages[index], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                    child: kIsWeb
+                        ? FutureBuilder<Uint8List?>(
+                            future: _selectedImages[index].readAsBytes(),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData && snapshot.data != null) {
+                                return Image.memory(
+                                  snapshot.data!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                );
+                              }
+                              return Container(
+                                color: Colors.grey[200],
+                                child: const Center(child: CircularProgressIndicator()),
+                              );
+                            },
+                          )
+                        : Image.file(
+                            File(_selectedImages[index].path),
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
                   ),
                   Positioned(
                     top: 4,
@@ -1054,7 +1042,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
       children: [
         Text(
           appLocalizations?.translate('description') ?? 'Описание',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF41454A)),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -1065,14 +1053,14 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
           decoration: InputDecoration(
             hintText: appLocalizations?.translate('description_hint') ??
                 'Подумайте, какие подробности вы хотели бы указать в заказе и добавьте их в описание.',
-            hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+            hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE)),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
             contentPadding: const EdgeInsets.all(16),
             counterText: '',
           ),
-          style: const TextStyle(fontSize: 16, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+          style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1085,10 +1073,9 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
               style: TextStyle(
                 fontSize: 12,
                 color: _descriptionController.text.length < 40 ? Colors.red : const Color(0xFF5F6368),
-                fontFamily: 'Plus Jakarta Sans',
               ),
             ),
-            Text('${_descriptionController.text.length}/9000', style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368), fontFamily: 'Plus Jakarta Sans')),
+            Text('${_descriptionController.text.length}/9000', style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
           ],
         ),
       ],
@@ -1122,7 +1109,6 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
                         style: TextStyle(
                           fontSize: 16,
                           color: _selectedCityName == null ? const Color(0xFF5F6368) : const Color(0xFF41454A),
-                          fontFamily: 'Plus Jakarta Sans',
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1143,14 +1129,14 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
       controller: _districtController,
       decoration: InputDecoration(
         hintText: appLocalizations?.translate('street_or_district') ?? 'Район или улица',
-        hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+        hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         prefixIcon: const Icon(Icons.place_outlined, size: 20, color: Color(0xFF5F6368)),
       ),
-      style: const TextStyle(fontSize: 16, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+      style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
     );
   }
 
@@ -1162,13 +1148,13 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
             controller: _houseController,
             decoration: InputDecoration(
               hintText: appLocalizations?.translate('house') ?? 'Дом',
-              hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+              hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE)),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
-            style: const TextStyle(fontSize: 16, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+            style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
           ),
         ),
         const SizedBox(width: 12),
@@ -1177,13 +1163,13 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
             controller: _apartmentController,
             decoration: InputDecoration(
               hintText: appLocalizations?.translate('apartment_optional') ?? 'Квартира (необязательно)',
-              hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+              hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE)),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
-            style: const TextStyle(fontSize: 16, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+            style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
           ),
         ),
       ],
@@ -1197,7 +1183,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
       inputFormatters: [maskFormatter],
       decoration: InputDecoration(
         hintText: '+7 (___) ___-__-__',
-        hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+        hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
@@ -1210,7 +1196,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
               )
             : null,
       ),
-      style: const TextStyle(fontSize: 16, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+      style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
       onChanged: (_) => setState(() {}),
     );
   }
@@ -1221,7 +1207,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
       keyboardType: TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
         hintText: appLocalizations?.translate('price_tenge') ?? 'Цена (тенге)',
-        hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE), fontFamily: 'Plus Jakarta Sans'),
+        hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFCBCDCE)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE8EAED))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F7EDE))),
@@ -1230,7 +1216,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
         suffixText: appLocalizations?.translate('tenge') ?? '₸',
         suffixStyle: const TextStyle(color: Color(0xFF41454A), fontWeight: FontWeight.bold),
       ),
-      style: const TextStyle(fontSize: 16, color: Color(0xFF41454A), fontFamily: 'Plus Jakarta Sans'),
+      style: const TextStyle(fontSize: 16, color: Color(0xFF41454A)),
     );
   }
 
@@ -1249,7 +1235,7 @@ class _AddOrderClientPageState extends State<AddOrderClientPage> with SingleTick
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
             : Text(
                 appLocalizations?.translate('add_order') ?? 'Добавить заказ',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white, fontFamily: 'Plus Jakarta Sans'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
               ),
       ),
     );

@@ -12,29 +12,59 @@ import 'services/auth/auth_service.dart';
 import 'providers/language_provider.dart';
 import 'localization/app_localizations.dart';
 
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
+
+void checkWebStorage() {
+  if (kIsWeb) {
+    try {
+      // Проверяем localStorage
+      html.window.localStorage['test'] = 'test';
+      html.window.localStorage.remove('test');
+      print('✅ Web: localStorage доступен');
+
+      // Проверяем sessionStorage
+      html.window.sessionStorage['test'] = 'test';
+      html.window.sessionStorage.remove('test');
+      print('✅ Web: sessionStorage доступен');
+    } catch (e) {
+      print('❌ Web: Storage недоступен: $e');
+      // Можно показать сообщение пользователю
+    }
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  
+  checkWebStorage();
+  
+  // Небольшая задержка для инициализации storage
   await Future.delayed(const Duration(milliseconds: 100));
-
+  
   // Проверяем, авторизован ли пользователь
   final isLoggedIn = await AuthService.isLoggedIn();
   final userRole = await AuthService.getUserRole();
-
-  print('Main - isLoggedIn: $isLoggedIn, userRole: $userRole'); // Отладка
-
+  
+  print('Main - isLoggedIn: $isLoggedIn, userRole: $userRole');
+  
   runApp(MyApp(initialRoute: _getInitialRoute(isLoggedIn, userRole)));
 }
 
 String _getInitialRoute(bool isLoggedIn, String? userRole) {
+  print('Getting initial route - isLoggedIn: $isLoggedIn, userRole: $userRole');
+  
   if (!isLoggedIn) {
+    print('Not logged in, going to registration');
     return '/registration';
   }
-
+  
   // Определяем куда перенаправить в зависимости от роли
   if (userRole == 'master') {
+    print('User is master, going to master-home');
     return '/master-home';
   } else {
+    print('User is client, going to client-home');
     return '/client-home';
   }
 }
@@ -84,12 +114,14 @@ class MyApp extends StatelessWidget {
               // Обработка динамических маршрутов
               if (settings.name == '/account-master') {
                 return MaterialPageRoute(
-                  builder: (context) => const EditProfilePage(initialMode: ProfileMode.master),
+                  builder: (context) =>
+                      const EditProfilePage(initialMode: ProfileMode.master),
                 );
               }
               if (settings.name == '/account-client') {
                 return MaterialPageRoute(
-                  builder: (context) => const AccountPage(accountType: AccountType.client),
+                  builder: (context) =>
+                      const AccountPage(accountType: AccountType.client),
                 );
               }
               return null;
